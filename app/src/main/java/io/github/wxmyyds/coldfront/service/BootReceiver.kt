@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import io.github.wxmyyds.coldfront.data.ProfileRepository
+import io.github.wxmyyds.coldfront.data.SettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
@@ -24,6 +26,19 @@ class BootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
+                // If the screen-off stop feature was explicitly enabled, reboot may have
+                // preserved a stopped fan while the app process was killed. Restore system
+                // control before attempting any optional automatic-mode recovery.
+                val screenOffStopEnabled = withTimeout(8_000) {
+                    SettingsRepository(context).settings.first().screenOffStopFan
+                }
+                if (screenOffStopEnabled) {
+                    CoolerService.start(context, Intent(context, CoolerService::class.java).apply {
+                        action = CoolerService.ACTION_RELEASE_TO_SYSTEM
+                    })
+                    Log.i(TAG, "开机安全网：请求交还风扇控制权")
+                }
+
                 // An active device alone is not consent to start background auto mode.
                 val profile = withTimeout(8_000) { ProfileRepository(context).loadServiceProfile() }
                 if (profile != null) {

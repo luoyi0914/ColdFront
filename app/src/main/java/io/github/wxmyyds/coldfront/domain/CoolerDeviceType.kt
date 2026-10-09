@@ -94,6 +94,27 @@ enum class CoolerDeviceType(
         description = "第八代 COLDLNG 架构,36W 峰值",
         rawMin = 40,
         rawMax = 80,
+    ),
+
+    /**
+     * 手机内置散热风扇（REDMI K90 Ultra / K90 Max）。
+     *
+     * 不是 BLE 设备：走 root 读写 `soc/odm:xiaomi_fan` 节点（见 fan/FanNodes.kt），
+     * 因此没有 MSD 识别码，也没有 RGB。
+     *
+     * `generation` **不能是 8** —— HomeScreen 的 `LevelSection` 按 `generation == 8`
+     * 决定用 8 Pro 的 1–8 档位滑条还是通用百分比滑条；内置风扇用
+     * `pwm_duty` 0–99 无极调速，所以走百分比滑条。
+     */
+    BUILT_IN_FAN(
+        deviceName = "内置散热风扇",
+        mainType = 0x00, subType = 0x00,
+        generation = 9,
+        description = "REDMI K90 Ultra/Max 内置风扇(root sysfs 控制)",
+        rawMin = 0,
+        rawMax = 99,
+        supportsRgb = false,
+        supportsAutoMode = true,
     );
 
     companion object {
@@ -137,6 +158,8 @@ enum class CoolerDeviceType(
             JACKET_6_PRO -> bleName.contains("6", true) && bleName.contains("Pro", true)
             JACKET_8_PRO -> (bleName.contains("8", true) && bleName.contains("Pro", true)) ||
                 bleName.contains("Cooler 8", true) || bleName.contains("8 Pro", true)
+            // 内置风扇不走 BLE 广播，永远不会由名称识别出来
+            BUILT_IN_FAN -> false
         }
     }
 

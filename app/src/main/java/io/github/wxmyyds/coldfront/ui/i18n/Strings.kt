@@ -8,9 +8,12 @@ import java.util.Locale
 /**
  * 100% Kotlin 的双语字符串表（中文 + 英文）。按系统 locale 切换。
  * 不使用 strings.xml，保持工程尽量纯 Kotlin。
+ *
+ * 本 fork 只控制 **REDMI K90 至尊版内置风扇**，因此表里不再有蓝牙散热器的
+ * 扫描/设备/灯效文案 —— 那些页面已经移除，留着只会误导用户。
  */
 interface AppStrings {
-    /** 当前文案是否中文(灯效等枚举名本地化用) */
+    /** 当前文案是否中文(枚举名本地化用) */
     val langIsZh: Boolean
     val appName: String
 
@@ -23,38 +26,74 @@ interface AppStrings {
 
     // —— 导航 ——
     val navHome: String
-    val navDevices: String
-    val navRgb: String
     val navSettings: String
 
-    // —— 首页:独立控制 ——
-    val homeCoolingSwitch: String
-    val homeCoolingSwitchDesc: String
-    val telemetryDegradedTitle: String
-    val telemetryDegradedHint: String
-    val homePowerLimitedTitle: String
-    val homePowerLimitedHint: String
-    val homePowerLimitedConfirm: String
+    // —— 首页：控制 ——
+    val homeTitle: String
+    val homeFanSwitch: String
+    val homeFanSwitchDesc: String
+    val homeConnected: String
+    val homeConnecting: String
     val homeSmart: String
     val homeSmartDesc: String
-    val homeBoost: String
-    val homeBoostDesc: String
-    val homeOvercold: String
-    val homeOvercoldDesc: String
+    val homeFullSpeed: String
+    val homeFullSpeedDesc: String
     val homeLevel: String
     val homeLevelGear: String
     val homeLevelPercent: String
     val homeSmartActiveLevel: String
+    val homeTemp: String
+    val telemetryDegradedTitle: String
+    val telemetryDegradedHint: String
+    val homeControlFailedTitle: String
+    val homeControlFailedHint: String
 
-    // —— 设备页 ——
-    val devicesTitle: String
-    val devicesEmpty: String
-    val devicesEmptyHint: String
-    val devicesAdd: String
-    val devicesConnect: String
-    val devicesConnected: String
-    val devicesDelete: String
-    val devicesLastSeen: String
+    // —— 首页：未启用 / 未就绪 ——
+    val homeNotActivated: String
+    val homeNotActivatedHint: String
+    val homeFailed: String
+    val homeFailedHint: String
+    val homeActivate: String
+    val homeRecheck: String
+
+    // —— 运行检查 ——
+    val checkTitle: String
+    val checkSubtitle: String
+    val checkModel: String
+    val checkRoot: String
+    val checkNode: String
+    val checkTemperature: String
+    val checkSpeed: String
+    val checkNotification: String
+    val checkPass: String
+    val checkFail: String
+    val checkSkip: String
+    val checkRunning: String
+    val checkRetry: String
+    val checkNotificationGrant: String
+    val checkNotificationHint: String
+    val checkSummaryReady: String
+    val checkSummaryNotReady: String
+    val checkRequiredHint: String
+
+    // —— 首次启动引导 ——
+    val welcomeTitle: String
+    val welcomeSubtitle: String
+    val onboardingNext: String
+    val onboardingPrev: String
+    val onboardingStart: String
+    val rootChecking: String
+    val rootGranted: String
+    val rootDenied: String
+    val rootHint: String
+    val rootRetry: String
+    val doneTitle: String
+    val doneReady: String
+    val doneNotReady: String
+    val doneEnter: String
+    val doneEnterAnyway: String
+    val doneClose: String
+    val checkOptionalOff: String
 
     // —— 设置页 ——
     val settingsTitle: String
@@ -73,9 +112,8 @@ interface AppStrings {
     val settingsPaletteContent: String
     val settingsPredictiveBack: String
     val settingsPredictiveBackDesc: String
-    val settingsDefaultDevice: String
-    val settingsDefaultDeviceDesc: String
-    val settingsDefaultDeviceOff: String
+    val settingsRecheck: String
+    val settingsRecheckDesc: String
     val settingsFollowSystem: String
     val settingsDarkModeLight: String
     val settingsDarkModeDark: String
@@ -85,80 +123,6 @@ interface AppStrings {
     val settingsAboutProject: String
     val aboutOpenLinkFailed: String
     val storageOperationFailed: String
-
-    // —— 首页 ——
-    val homeTitle: String
-    val homeNoDeviceHint: String
-    val homeConnecting: String
-    val homeTemp: String
-    val homeConnected: String
-    val homeConnectionFailed: String
-    val homeRetryHint: String
-    val homeGoScan: String
-    val homeNotConnected: String
-
-    // —— 扫描/添加设备 ——
-    val scanTitle: String
-    val scanScanning: String
-    val scanNoFound: String
-    val scanNoFoundHint: String
-    val scanRescan: String
-    val scanSelect: String
-    val scanMatchedByName: String
-    val scanBluetoothOff: String
-    val scanBluetoothOffHint: String
-    val scanEnableBluetooth: String
-
-    // —— 诊断模式 ——
-    val diagToggle: String
-    val diagHint: String
-    val diagNoName: String
-    val diagNoSignal: String
-    val diagNoSignalHint: String
-    val diagMsd: String
-    val diagServiceData: String
-    val diagServiceUuids: String
-    val diagMoreCount: String
-    val diagConnectAs: String
-    val diagCancel: String
-    val diagRawCount: String
-
-    // —— 诊断状态行 ——
-    val diagStatusPermission: String
-    val diagStatusScanner: String
-    val diagStatusLocation: String
-    val diagStatusBluetooth: String
-    val diagPermissionGranted: String
-    val diagPermissionMissing: String
-    val diagScannerRunning: String
-    val diagScannerStopped: String
-    val diagScannerFailed: String
-    val diagServiceOn: String
-    val diagServiceOff: String
-    val diagGrantAgain: String
-    val diagOpenAppSettings: String
-    val diagOpenLocation: String
-    val diagCoolerBadge: String
-
-    // —— RGB ——
-    val rgbTitle: String
-    val rgbEffect: String
-    val rgbBreathMode: String
-    val rgbBreathSingle: String
-    val rgbBreathFull: String
-    val rgbRed: String
-    val rgbGreen: String
-    val rgbBlue: String
-    val rgbApply: String
-    val rgbWriting: String
-    val rgbSent: String
-    val rgbWriteFailed: String
-    val rgbConnectFirst: String
-    val rgbGoConnect: String
-    val rgbPalette: String
-    val rgbCustomColor: String
-    val rgbNotSupported: String
-    val rgbSyncing: String
 
     // —— 自动模式/服务 ——
     val serviceChannelName: String
@@ -171,6 +135,49 @@ interface AppStrings {
     val serviceUnavailable: String
     val serviceControlFailed: String
 
+    // —— 温控曲线 ——
+    val curveTitle: String
+    val curveDescription: String
+    val curveBaseline: String
+    val curveNow: String
+    val curvePresetQuiet: String
+    val curvePresetBalanced: String
+    val curvePresetPerformance: String
+    val curvePresetCustom: String
+    val curvePointFormat: String
+    val curveTempAxis: String
+    val curveDutyAxis: String
+    val curveSave: String
+    val curveRevert: String
+    val curveSaved: String
+    val curveLivePointFormat: String
+    val curveDangerTitle: String
+    val curveDangerHintFormat: String
+    val curveDangerConfirmTitle: String
+    val curveDangerConfirmBody: String
+    val curveDangerConfirmSave: String
+    val curveDangerConfirmBack: String
+    val curveCorruptTitle: String
+    val curveCorruptHint: String
+    val curveCorruptRepair: String
+
+    // —— 息屏停转与温度源 ——
+    val settingsScreenOffStop: String
+    val settingsScreenOffStopDesc: String
+    val settingsTemperatureSource: String
+
+    /** 与 `FanNodes.temperatureSources` **顺序一一对应**；由单测守住这条对齐关系。 */
+    val temperatureSourceNames: List<String>
+    val screenOffStoppedNotice: String
+    val controlDegradedTitle: String
+    val controlDegradedHint: String
+
+    // —— 轮询间隔与升降过渡 ——
+    val settingsPollInterval: String
+    val settingsPollIntervalDesc: String
+    val settingsFanTransition: String
+    val settingsFanTransitionDesc: String
+    val settingsRangeHint: String
 }
 
 object ZhStrings : AppStrings {
@@ -182,37 +189,71 @@ object ZhStrings : AppStrings {
     override val retry = "重试"
     override val close = "关闭"
 
-    override val navHome = "首页"
-    override val navDevices = "设备"
-    override val navRgb = "灯效"
+    override val navHome = "风扇"
     override val navSettings = "设置"
 
-    override val homeCoolingSwitch = "散热开关"
-    override val homeCoolingSwitchDesc = "关闭后风扇全停"
-    override val telemetryDegradedTitle = "状态更新受限"
-    override val telemetryDegradedHint = "部分状态已停止更新，显示值可能已过期。请重新连接以恢复更新。"
-    override val homePowerLimitedTitle = "充电器供电功率不足"
-    override val homePowerLimitedHint = "散热器已限制制冷档位上限，并关闭了破坏神。请换用功率更大的充电器或供电口。"
-    override val homePowerLimitedConfirm = "知道了"
+    override val homeTitle = "风扇控制"
+    override val homeFanSwitch = "风扇开关"
+    override val homeFanSwitchDesc = "关闭后风扇完全停转"
+    override val homeConnected = "控制已就绪"
+    override val homeConnecting = "正在读取状态…"
     override val homeSmart = "智能温控"
-    override val homeSmartDesc = "由散热器根据温度自动调节档位"
-    override val homeBoost = "破坏神"
-    override val homeBoostDesc = "超频增强模式(功耗更高)"
-    override val homeOvercold = "过冷保护"
-    override val homeOvercoldDesc = "防止冷凝:低温自动降档保护"
-    override val homeLevel = "制冷档位"
+    override val homeSmartDesc = "按本机温度自动调节转速"
+    override val homeFullSpeed = "满速模式"
+    override val homeFullSpeedDesc = "强制最高转速，功耗与噪音更高"
+    override val homeLevel = "风扇转速"
     override val homeLevelGear = "%d 档"
     override val homeLevelPercent = "%d%%"
-    override val homeSmartActiveLevel = "智能温控运行中,档位由设备调节"
+    override val homeSmartActiveLevel = "智能温控运行中，转速由温度曲线调节"
+    override val homeTemp = "温度"
+    override val telemetryDegradedTitle = "状态更新受限"
+    override val telemetryDegradedHint = "部分读数已停止更新，显示值可能已过期。请运行检查确认 Root 与风扇节点状态。"
+    override val homeControlFailedTitle = "控制指令未生效"
+    override val homeControlFailedHint = "节点写入失败，风扇可能没有按预期变化。请运行检查确认 Root 与风扇节点状态。"
 
-    override val devicesTitle = "我的设备"
-    override val devicesEmpty = "还没有保存的设备"
-    override val devicesEmptyHint = "点击下方按钮扫描并添加散热器"
-    override val devicesAdd = "添加设备"
-    override val devicesConnect = "连接"
-    override val devicesConnected = "已连接"
-    override val devicesDelete = "删除"
-    override val devicesLastSeen = "上次使用:%s"
+    override val homeNotActivated = "风扇控制未启用"
+    override val homeNotActivatedHint = "启用前不会修改系统风扇策略；挂载过程只读取状态。"
+    override val homeFailed = "无法控制本机风扇"
+    override val homeFailedHint = "需要 Root 权限和可读写的风扇节点。请完成运行检查后重试。"
+    override val homeActivate = "启用控制"
+    override val homeRecheck = "运行检查"
+
+    override val checkTitle = "运行检查"
+    override val checkSubtitle = "确认风扇节点与传感器状态"
+    override val checkModel = "本机型号"
+    override val checkRoot = "Root 权限"
+    override val checkNode = "风扇节点"
+    override val checkTemperature = "温度读取"
+    override val checkSpeed = "转速读取"
+    override val checkNotification = "通知权限"
+    override val checkPass = "正常"
+    override val checkFail = "异常"
+    override val checkSkip = "未检测"
+    override val checkRunning = "检测中…"
+    override val checkRetry = "重试"
+    override val checkNotificationGrant = "允许通知"
+    override val checkNotificationHint = "可选：用于后台调节风扇时显示常驻通知"
+    override val checkSummaryReady = "必需项全部通过，可以控制本机风扇"
+    override val checkSummaryNotReady = "仍有必需项未通过，风扇控制保持禁用"
+    override val checkRequiredHint = "机型为信息项；通知权限为可选项，未开启不影响风扇控制。"
+
+    override val welcomeTitle = "欢迎使用 ColdFront"
+    override val welcomeSubtitle = "专为 REDMI K90 至尊版内置风扇设计"
+    override val onboardingNext = "下一步"
+    override val onboardingPrev = "上一步"
+    override val onboardingStart = "开始使用"
+    override val rootChecking = "正在检测…"
+    override val rootGranted = "已获取 Root 权限"
+    override val rootDenied = "未获取 Root 权限"
+    override val rootHint = "风扇节点需要 Root 权限才能读写，请在授权界面选择允许。权限被拒绝时不会修改任何风扇设置。"
+    override val rootRetry = "重新检测"
+    override val doneTitle = "设置完成"
+    override val doneReady = "一切就绪，现在可以控制本机风扇了"
+    override val doneNotReady = "仍有检查未通过，风扇控制会保持禁用，可稍后重新检查"
+    override val doneEnter = "开始使用"
+    override val doneEnterAnyway = "仍然进入"
+    override val doneClose = "完成"
+    override val checkOptionalOff = "未开启（可选）"
 
     override val settingsTitle = "设置"
     override val settingsDynamicColor = "动态取色"
@@ -230,97 +271,67 @@ object ZhStrings : AppStrings {
     override val settingsPaletteContent = "Content"
     override val settingsPredictiveBack = "预测性返回"
     override val settingsPredictiveBackDesc = "启用导航页面的系统返回过渡"
-    override val settingsDefaultDevice = "默认连接的设备"
-    override val settingsDefaultDeviceDesc = "应用启动时自动连接该设备"
-    override val settingsDefaultDeviceOff = "关闭"
+    override val settingsRecheck = "运行检查"
+    override val settingsRecheckDesc = "重新检测 Root、风扇节点与传感器"
     override val settingsFollowSystem = "跟随系统"
     override val settingsDarkModeLight = "浅色"
     override val settingsDarkModeDark = "深色"
     override val settingsLanguage = "语言"
     override val settingsAbout = "关于"
     override val settingsAboutReport = "提交错误报告"
-    override val settingsAboutProject = "项目主页"
+    override val settingsAboutProject = "上游项目主页"
     override val aboutOpenLinkFailed = "没有可用于打开此链接的应用。"
     override val storageOperationFailed = "读取或保存配置失败，请稍后重试。"
 
-    override val homeTitle = "散热控制"
-    override val homeNoDeviceHint = "点击下方按钮扫描并添加红魔散热器"
-    override val homeConnecting = "连接中…"
-    override val homeTemp = "温度"
-    override val homeConnected = "已连接"
-    override val homeConnectionFailed = "连接失败"
-    override val homeRetryHint = "请确认散热器已通电并靠近后重试"
-    override val homeGoScan = "去扫描设备"
-    override val homeNotConnected = "未连接散热器"
-
-    override val scanTitle = "扫描散热器"
-    override val scanScanning = "正在扫描…"
-    override val scanNoFound = "未发现红魔散热器"
-    override val scanNoFoundHint = "请确认散热器已通电并靠近手机"
-    override val scanRescan = "重新扫描"
-    override val scanSelect = "连接"
-    override val scanMatchedByName = "名称识别"
-    override val scanBluetoothOff = "蓝牙未开启"
-    override val scanBluetoothOffHint = "请先开启蓝牙以扫描设备"
-    override val scanEnableBluetooth = "开启蓝牙"
-
-    override val diagToggle = "显示全部设备（诊断）"
-    override val diagHint = "不过滤识别，显示周围全部 BLE 原始广播：MSD/UUID。散热器广播的内容可直接读出，也可手动选型号连接。"
-    override val diagNoName = "（无名设备）"
-    override val diagNoSignal = "一个广播都没收到"
-    override val diagNoSignalHint = "检查：①散热器已通电（插电/磁吸亮灯） ②系统定位服务已开启（旧系统扫描依赖定位） ③蓝牙已开启 ④距离足够近"
-    override val diagMsd = "厂商数据"
-    override val diagServiceData = "服务数据"
-    override val diagServiceUuids = "服务 UUID"
-    override val diagMoreCount = "另有 %d 项"
-    override val diagConnectAs = "选择型号连接"
-    override val diagCancel = "取消"
-    override val diagRawCount = "共 %d 个设备"
-
-    override val diagStatusPermission = "扫描权限"
-    override val diagStatusScanner = "扫描器"
-    override val diagStatusLocation = "定位服务"
-    override val diagStatusBluetooth = "蓝牙"
-    override val diagPermissionGranted = "已授予"
-    override val diagPermissionMissing = "未授予"
-    override val diagScannerRunning = "运行中"
-    override val diagScannerStopped = "已停止"
-    override val diagScannerFailed = "失败（码 %d）"
-    override val diagServiceOn = "开启"
-    override val diagServiceOff = "关闭"
-    override val diagGrantAgain = "重新授权"
-    override val diagOpenAppSettings = "去应用设置"
-    override val diagOpenLocation = "去开定位"
-    override val diagCoolerBadge = "已识别:%s"
-
-    override val rgbTitle = "RGB 灯效"
-    override val rgbEffect = "灯效模式"
-    override val rgbBreathMode = "呼吸颜色"
-    override val rgbBreathSingle = "单色"
-    override val rgbBreathFull = "全彩"
-    override val rgbRed = "红"
-    override val rgbGreen = "绿"
-    override val rgbBlue = "蓝"
-    override val rgbConnectFirst = "连接散热器后即可调节灯效"
-    override val rgbGoConnect = "去连接"
-    override val rgbPalette = "预设颜色"
-    override val rgbCustomColor = "自定义颜色"
-    override val rgbApply = "应用"
-    override val rgbWriting = "正在发送…"
-    override val rgbSent = "已发送到设备"
-    override val rgbWriteFailed = "发送失败，点击重试"
-    override val rgbNotSupported = "该设备不支持 RGB"
-    override val rgbSyncing = "正在读取设备当前灯效…"
-
-    override val serviceChannelName = "散热器服务"
-    override val serviceChannelDesc = "散热器自动模式与状态通知"
-    override val serviceAutoOn = "自动模式：开"
+    override val serviceChannelName = "风扇控制服务"
+    override val serviceChannelDesc = "智能温控常驻通知与状态"
+    override val serviceAutoOn = "智能温控：开"
     override val serviceSwitchManual = "切回手动"
-    override val serviceReconnect = "重新连接"
+    override val serviceReconnect = "重新检查"
     override val serviceWaitingConfig = "等待配置…"
-    override val serviceManual = "自动模式：关"
-    override val serviceControlFailed = "未能确认温控命令已发送，请检查连接后重试。"
-    override val serviceUnavailable = "无法启动自动模式，请打开应用检查蓝牙权限并连接支持智能温控的设备。"
+    override val serviceManual = "智能温控：关"
+    override val serviceControlFailed = "未能确认温控指令已生效，请运行检查后重试。"
+    override val serviceUnavailable = "无法启动智能温控。请打开应用完成运行检查，确认 Root 权限与风扇节点可用。"
+
+    override val curveTitle = "温控曲线"
+    override val curveDescription = "拖动节点调整温度与转速。转速随温度只会升高，不会回落。"
+    override val curveBaseline = "默认曲线"
+    override val curveNow = "当前"
+    override val curvePresetQuiet = "静谧"
+    override val curvePresetBalanced = "均衡"
+    override val curvePresetPerformance = "性能"
+    override val curvePresetCustom = "自定义"
+    override val curvePointFormat = "节点 %d"
+    override val curveTempAxis = "温度 °C"
+    override val curveDutyAxis = "转速 %"
+    override val curveSave = "保存"
+    override val curveRevert = "放弃修改"
+    override val curveSaved = "曲线已保存"
+    override val curveLivePointFormat = "%.0f°C → %d%%"
+    override val curveDangerTitle = "高温区转速偏低"
+    override val curveDangerHintFormat = "%d°C 时仅 %d%%（默认曲线为 ≥%d%%）"
+    override val curveDangerConfirmTitle = "仍然保存这条曲线？"
+    override val curveDangerConfirmBody = "曲线在高温区转速偏低时，机身会更热并更早降频。风扇本身通常不会损坏——芯片有独立于风扇的热保护——但性能与手感会受影响。"
+    override val curveDangerConfirmSave = "仍然保存"
+    override val curveDangerConfirmBack = "返回调整"
+    override val curveCorruptTitle = "曲线数据损坏"
+    override val curveCorruptHint = "存储中的曲线无法解析，已恢复为默认曲线。"
+    override val curveCorruptRepair = "恢复默认"
+
+    override val settingsScreenOffStop = "息屏停转"
+    override val settingsScreenOffStopDesc = "屏幕熄灭后停转以省电；充电或温度偏高时交回系统管理"
+    override val settingsTemperatureSource = "温度源"
+    override val temperatureSourceNames = listOf(
+        "核心温度", "外壳温度", "电池温度", "充电IC温度", "闪存温度", "运存温度", "大核温度", "中核温度",
+    )
+    override val screenOffStoppedNotice = "息屏停转中：屏幕点亮后自动恢复曲线"
+    override val settingsPollInterval = "轮询间隔"
+    override val settingsPollIntervalDesc = "每隔多久读取一次温度并计算目标转速；越短越跟手，也越频繁调用 root"
+    override val settingsFanTransition = "升降过渡时间"
+    override val settingsFanTransitionDesc = "目标变化后在线性过渡时间内走到目标；0 ms = 立即到位"
+    override val settingsRangeHint = "可用范围"
+    override val controlDegradedTitle = "已交回系统管理"
+    override val controlDegradedHint = "连续读不到温度，曲线已停止接管，风扇交回系统策略。请运行检查确认温度传感器可读。"
 }
 
 object EnStrings : AppStrings {
@@ -332,37 +343,71 @@ object EnStrings : AppStrings {
     override val retry = "Retry"
     override val close = "Close"
 
-    override val navHome = "Home"
-    override val navDevices = "Devices"
-    override val navRgb = "RGB"
+    override val navHome = "Fan"
     override val navSettings = "Settings"
 
-    override val homeCoolingSwitch = "Cooling switch"
-    override val homeCoolingSwitchDesc = "Off stops the fan completely"
-    override val telemetryDegradedTitle = "Telemetry updates interrupted"
-    override val telemetryDegradedHint = "Some readings have stopped updating and may be out of date. Reconnect to restore updates."
-    override val homePowerLimitedTitle = "Charger power is insufficient"
-    override val homePowerLimitedHint = "The cooler capped the cooling level and turned Boost off. Use a higher-wattage charger or port."
-    override val homePowerLimitedConfirm = "Got it"
+    override val homeTitle = "Fan control"
+    override val homeFanSwitch = "Fan switch"
+    override val homeFanSwitchDesc = "Turning this off stops the fan completely"
+    override val homeConnected = "Ready"
+    override val homeConnecting = "Reading state…"
     override val homeSmart = "Smart temp control"
-    override val homeSmartDesc = "The cooler adjusts its level by itself"
-    override val homeBoost = "Boost (Destruction God)"
-    override val homeBoostDesc = "Overclocking mode (higher power draw)"
-    override val homeOvercold = "Over-cold protection"
-    override val homeOvercoldDesc = "Anti-condensation: auto throttling at low temps"
-    override val homeLevel = "Cooling level"
+    override val homeSmartDesc = "Adjusts fan speed from this phone's temperature"
+    override val homeFullSpeed = "Full speed"
+    override val homeFullSpeedDesc = "Forces maximum speed — more power draw and noise"
+    override val homeLevel = "Fan speed"
     override val homeLevelGear = "Level %d"
     override val homeLevelPercent = "%d%%"
-    override val homeSmartActiveLevel = "Smart control active - level managed by device"
+    override val homeSmartActiveLevel = "Smart control active - speed follows the temperature curve"
+    override val homeTemp = "Temperature"
+    override val telemetryDegradedTitle = "Readings interrupted"
+    override val telemetryDegradedHint = "Some readings stopped updating and may be out of date. Run the checks to verify root and the fan node."
+    override val homeControlFailedTitle = "Command had no effect"
+    override val homeControlFailedHint = "A node write failed, so the fan may not have changed. Run the checks to verify root and the fan node."
 
-    override val devicesTitle = "My devices"
-    override val devicesEmpty = "No saved devices yet"
-    override val devicesEmptyHint = "Tap the button below to scan and add a cooler"
-    override val devicesAdd = "Add device"
-    override val devicesConnect = "Connect"
-    override val devicesConnected = "Connected"
-    override val devicesDelete = "Delete"
-    override val devicesLastSeen = "Last used: %s"
+    override val homeNotActivated = "Fan control is off"
+    override val homeNotActivatedHint = "Nothing changes the system fan policy until you enable control; mounting only reads state."
+    override val homeFailed = "Can't control the built-in fan"
+    override val homeFailedHint = "Root access and a readable fan node are required. Run the checks, then retry."
+    override val homeActivate = "Enable control"
+    override val homeRecheck = "Run checks"
+
+    override val checkTitle = "Checks"
+    override val checkSubtitle = "Verify the fan node and sensors"
+    override val checkModel = "Device model"
+    override val checkRoot = "Root access"
+    override val checkNode = "Fan node"
+    override val checkTemperature = "Temperature read"
+    override val checkSpeed = "Speed read"
+    override val checkNotification = "Notification permission"
+    override val checkPass = "OK"
+    override val checkFail = "Failed"
+    override val checkSkip = "Not checked"
+    override val checkRunning = "Checking…"
+    override val checkRetry = "Retry"
+    override val checkNotificationGrant = "Allow notifications"
+    override val checkNotificationHint = "Optional: shows a persistent notification while controlling the fan in the background"
+    override val checkSummaryReady = "All required checks passed - you can control the built-in fan"
+    override val checkSummaryNotReady = "Required checks still failing - fan control stays disabled"
+    override val checkRequiredHint = "The model row is informational; notifications are optional and never block fan control."
+
+    override val welcomeTitle = "Welcome to ColdFront"
+    override val welcomeSubtitle = "Built for the REDMI K90 Ultra's internal fan"
+    override val onboardingNext = "Next"
+    override val onboardingPrev = "Back"
+    override val onboardingStart = "Get started"
+    override val rootChecking = "Checking…"
+    override val rootGranted = "Root access granted"
+    override val rootDenied = "Root access not granted"
+    override val rootHint = "The fan node needs root access to read and write. Allow it in the prompt; if you decline, no fan setting is touched."
+    override val rootRetry = "Check again"
+    override val doneTitle = "Setup complete"
+    override val doneReady = "Everything is ready - you can control the built-in fan now"
+    override val doneNotReady = "Some checks failed. Fan control stays disabled; you can run the checks again later."
+    override val doneEnter = "Get started"
+    override val doneEnterAnyway = "Continue anyway"
+    override val doneClose = "Done"
+    override val checkOptionalOff = "Off (optional)"
 
     override val settingsTitle = "Settings"
     override val settingsDynamicColor = "Dynamic color"
@@ -380,97 +425,67 @@ object EnStrings : AppStrings {
     override val settingsPaletteContent = "Content"
     override val settingsPredictiveBack = "Predictive back"
     override val settingsPredictiveBackDesc = "Enable system back transitions for app navigation"
-    override val settingsDefaultDevice = "Default device"
-    override val settingsDefaultDeviceDesc = "Connects automatically when the app starts"
-    override val settingsDefaultDeviceOff = "Off"
+    override val settingsRecheck = "Run checks"
+    override val settingsRecheckDesc = "Re-check root, the fan node and the sensors"
     override val settingsFollowSystem = "Follow system"
     override val settingsDarkModeLight = "Light"
     override val settingsDarkModeDark = "Dark"
     override val settingsLanguage = "Language"
     override val settingsAbout = "About"
     override val settingsAboutReport = "Report an issue"
-    override val settingsAboutProject = "Project homepage"
+    override val settingsAboutProject = "Upstream project"
     override val aboutOpenLinkFailed = "No app is available to open this link."
     override val storageOperationFailed = "Couldn't read or save settings. Please try again."
 
-    override val homeTitle = "Cooler Control"
-    override val homeNoDeviceHint = "Tap below to scan and add a Redmagic cooler"
-    override val homeConnecting = "Connecting…"
-    override val homeTemp = "Temperature"
-    override val homeConnected = "Connected"
-    override val homeConnectionFailed = "Connection failed"
-    override val homeRetryHint = "Make sure the cooler is powered on and nearby, then retry"
-    override val homeGoScan = "Scan for devices"
-    override val homeNotConnected = "Not connected"
-
-    override val scanTitle = "Scan for cooler"
-    override val scanScanning = "Scanning…"
-    override val scanNoFound = "No Redmagic cooler found"
-    override val scanNoFoundHint = "Make sure the cooler is powered on and near the phone"
-    override val scanRescan = "Rescan"
-    override val scanSelect = "Connect"
-    override val scanMatchedByName = "by name"
-    override val scanBluetoothOff = "Bluetooth is off"
-    override val scanBluetoothOffHint = "Enable Bluetooth to scan for devices"
-    override val scanEnableBluetooth = "Enable Bluetooth"
-
-    override val diagToggle = "Show all devices (diagnostics)"
-    override val diagHint = "No identification filtering — shows every raw BLE advertisement around you: MSD/UUID. Read what your cooler actually broadcasts, or connect by manually picking its model."
-    override val diagNoName = "(unnamed)"
-    override val diagNoSignal = "Not a single advertisement received"
-    override val diagNoSignalHint = "Check: ① cooler is powered (plugged in / magnetically attached with LED on) ② system Location service is ON (scanning depends on it on older Android) ③ Bluetooth is ON ④ stay close"
-    override val diagMsd = "Manufacturer data"
-    override val diagServiceData = "Service data"
-    override val diagServiceUuids = "Service UUIDs"
-    override val diagMoreCount = "+%d more"
-    override val diagConnectAs = "Connect as model…"
-    override val diagCancel = "Cancel"
-    override val diagRawCount = "%d devices total"
-
-    override val diagStatusPermission = "Scan permission"
-    override val diagStatusScanner = "Scanner"
-    override val diagStatusLocation = "Location service"
-    override val diagStatusBluetooth = "Bluetooth"
-    override val diagPermissionGranted = "granted"
-    override val diagPermissionMissing = "missing"
-    override val diagScannerRunning = "running"
-    override val diagScannerStopped = "stopped"
-    override val diagScannerFailed = "failed (code %d)"
-    override val diagServiceOn = "on"
-    override val diagServiceOff = "off"
-    override val diagGrantAgain = "Grant again"
-    override val diagOpenAppSettings = "App settings"
-    override val diagOpenLocation = "Enable location"
-    override val diagCoolerBadge = "Identified: %s"
-
-    override val rgbTitle = "RGB Lighting"
-    override val rgbEffect = "Effect"
-    override val rgbBreathMode = "Breath color"
-    override val rgbBreathSingle = "Single color"
-    override val rgbBreathFull = "Full color"
-    override val rgbRed = "R"
-    override val rgbGreen = "G"
-    override val rgbBlue = "B"
-    override val rgbConnectFirst = "Connect your cooler to control lighting"
-    override val rgbGoConnect = "Connect"
-    override val rgbPalette = "Preset colors"
-    override val rgbCustomColor = "Custom color"
-    override val rgbApply = "Apply"
-    override val rgbWriting = "Sending…"
-    override val rgbSent = "Sent to cooler"
-    override val rgbWriteFailed = "Send failed — tap to retry"
-    override val rgbNotSupported = "This device does not support RGB"
-    override val rgbSyncing = "Reading the cooler's current lighting…"
-
-    override val serviceChannelName = "Cooler service"
-    override val serviceChannelDesc = "Cooler auto-mode and status notifications"
-    override val serviceAutoOn = "Auto mode: on"
+    override val serviceChannelName = "Fan control service"
+    override val serviceChannelDesc = "Persistent notification and status for smart temp control"
+    override val serviceAutoOn = "Smart control: on"
     override val serviceSwitchManual = "Switch to manual"
-    override val serviceReconnect = "Reconnect"
+    override val serviceReconnect = "Run checks"
     override val serviceWaitingConfig = "Waiting for config…"
-    override val serviceManual = "Auto mode: off"
-    override val serviceControlFailed = "Couldn't confirm the smart-control command. Check the connection and retry."
-    override val serviceUnavailable = "Can't start auto mode. Open the app to check Bluetooth permissions and connect a cooler with smart control."
+    override val serviceManual = "Smart control: off"
+    override val serviceControlFailed = "Couldn't confirm the smart-control command. Run the checks and retry."
+    override val serviceUnavailable = "Can't start smart control. Open the app, run the checks and confirm root access plus the fan node."
+
+    override val curveTitle = "Fan curve"
+    override val curveDescription = "Drag the points to tune temperature and speed. Speed can only rise with temperature, never fall."
+    override val curveBaseline = "Default curve"
+    override val curveNow = "Now"
+    override val curvePresetQuiet = "Quiet"
+    override val curvePresetBalanced = "Balanced"
+    override val curvePresetPerformance = "Performance"
+    override val curvePresetCustom = "Custom"
+    override val curvePointFormat = "Point %d"
+    override val curveTempAxis = "Temp °C"
+    override val curveDutyAxis = "Speed %"
+    override val curveSave = "Save"
+    override val curveRevert = "Discard"
+    override val curveSaved = "Curve saved"
+    override val curveLivePointFormat = "%.0f°C → %d%%"
+    override val curveDangerTitle = "Low speed at high temperature"
+    override val curveDangerHintFormat = "At %d°C only %d%% (the default curve uses ≥%d%%)"
+    override val curveDangerConfirmTitle = "Save this curve anyway?"
+    override val curveDangerConfirmBody = "Holding the fan back at high temperature makes the phone hotter and throttle sooner. The fan itself is unlikely to be damaged — the chip has thermal protection independent of the fan — but performance and feel will suffer."
+    override val curveDangerConfirmSave = "Save anyway"
+    override val curveDangerConfirmBack = "Keep editing"
+    override val curveCorruptTitle = "Curve data was damaged"
+    override val curveCorruptHint = "The stored curve could not be read, so the default curve was restored."
+    override val curveCorruptRepair = "Restore default"
+
+    override val settingsScreenOffStop = "Stop when screen off"
+    override val settingsScreenOffStopDesc = "Stop the fan with the screen off to save power; the system takes over while charging or when it runs warm"
+    override val settingsTemperatureSource = "Temperature source"
+    override val temperatureSourceNames = listOf(
+        "CPU core", "Chassis", "Battery", "Charging IC", "Storage", "RAM", "Big cores", "Mid cores",
+    )
+    override val screenOffStoppedNotice = "Stopped while the screen is off; the curve resumes when you turn it back on"
+    override val settingsPollInterval = "Refresh interval"
+    override val settingsPollIntervalDesc = "How often the curve reads temperature and computes the target speed; shorter reacts faster but calls root more often"
+    override val settingsFanTransition = "Ramp duration"
+    override val settingsFanTransitionDesc = "How long to move linearly to a changed target; 0 ms jumps straight to the target"
+    override val settingsRangeHint = "Allowed range"
+    override val controlDegradedTitle = "Handed back to the system"
+    override val controlDegradedHint = "The temperature became unreadable, so the curve stopped driving the fan and the system took over. Run the checks to confirm the sensor is readable."
 }
 
 /**

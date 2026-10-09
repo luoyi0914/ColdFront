@@ -5,7 +5,6 @@ import android.service.quicksettings.TileService
 import android.util.Log
 import android.widget.Toast
 import io.github.wxmyyds.coldfront.ble.BleManagerHolder
-import io.github.wxmyyds.coldfront.ble.BlePermissionManager
 import io.github.wxmyyds.coldfront.data.ProfileRepository
 import io.github.wxmyyds.coldfront.data.SettingsRepository
 import io.github.wxmyyds.coldfront.ui.i18n.stringsFor
@@ -49,10 +48,6 @@ class CoolerTileService : TileService() {
         if (click?.isActive == true) return
         click = scope.launch {
             try {
-                if (!BlePermissionManager.hasConnectPermission(this@CoolerTileService)) {
-                    showUnavailable()
-                    return@launch
-                }
                 val current = ble.state.value
                 if (current.isConnected && current.smartOn) {
                     // Unlike notification Close, this is advertised as auto-mode OFF.
@@ -94,7 +89,6 @@ class CoolerTileService : TileService() {
     private fun refresh() {
         qsTile?.apply {
             state = when {
-                !BlePermissionManager.hasConnectPermission(this@CoolerTileService) -> Tile.STATE_UNAVAILABLE
                 ble.state.value.isConnected && ble.state.value.smartOn -> Tile.STATE_ACTIVE
                 else -> Tile.STATE_INACTIVE
             }

@@ -5,17 +5,20 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import io.github.wxmyyds.coldfront.ble.BleManagerHolder
-import io.github.wxmyyds.coldfront.ble.BlePermissionManager
-import io.github.wxmyyds.coldfront.ble.CoolerBleManager
+import io.github.wxmyyds.coldfront.ble.CoolerTransport
 import io.github.wxmyyds.coldfront.data.ProfileRepository
 import io.github.wxmyyds.coldfront.data.SettingsRepository
 import io.github.wxmyyds.coldfront.data.retryStorageReads
@@ -46,6 +49,7 @@ class CoolerService : Service() {
         const val ACTION_STOP = "io.github.wxmyyds.coldfront.STOP"
         const val ACTION_SWITCH_TO_MANUAL = "io.github.wxmyyds.coldfront.SWITCH_TO_MANUAL"
         const val ACTION_RECONNECT = "io.github.wxmyyds.coldfront.RECONNECT"
+        const val ACTION_RELEASE_TO_SYSTEM = "io.github.wxmyyds.coldfront.RELEASE_TO_SYSTEM"
         private const val EXTRA_CONTROL_ADDRESS = "control_address"
         private const val EXTRA_CONTROL_SESSION = "control_session"
         private const val EXTRA_PROFILE_ID = "profile_id"
@@ -74,7 +78,7 @@ class CoolerService : Service() {
         }
 
         fun start(context: Context, intent: Intent) {
-            if (!BlePermissionManager.hasConnectPermission(context)) return
+            // 内置风扇走 root sysfs，不需要蓝牙权限，这里不再用 BLE 权限做门禁。
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)
         }
@@ -85,7 +89,7 @@ class CoolerService : Service() {
     private val commands = Channel<ServiceCommand>(Channel.UNLIMITED)
     private var latestStartId = 0
     private var processingStartId = 0
-    private lateinit var ble: CoolerBleManager
+    private lateinit var ble: CoolerTransport
     private lateinit var profiles: ProfileRepository
     private var target: CoolerProfile? = null
     private var activation: Job? = null
@@ -93,14 +97,43 @@ class CoolerService : Service() {
     private var strings: AppStrings = stringsFor(Locale.getDefault())
     private var lastNotification: ServiceNotification? = null
 
+    /**
+     * 屏幕状态广播：**息屏停转**靠它决定何时挂起曲线、何时放慢轮询。
+     *
+     * 广播由服务持有，而不是让 `FanManager` 自己去注册：生命周期归属要清晰，
+     * 也避免控制器在没有任何宿主时偷偷活着。
+     */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_ON -> ble.setScreenInteractive(true)
+                Intent.ACTION_SCREEN_OFF -> ble.setScreenInteractive(false)
+            }
+        }
+    }
+
+    private fun registerScreenReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // 服务可能是息屏时被拉起来的（START_STICKY / 开机恢复），初始状态必须问系统，
+        // 不能默认亮屏 —— 否则一开机就会把曲线当成"屏幕正亮着"跑起来。
+        ble.setScreenInteractive(isInteractive())
+    }
+
+    private fun unregisterScreenReceiver() {
+        runCatching { unregisterReceiver(screenReceiver) }
+    }
+
+    private fun isInteractive(): Boolean =
+        getSystemService(PowerManager::class.java)?.isInteractive ?: true
+
     override fun onCreate() {
         super.onCreate()
         // Permission checks also belong here: exceptions from onCreate are NOT caught by
         // the receiver/tile that merely scheduled startForegroundService().
-        if (!BlePermissionManager.hasConnectPermission(this)) {
-            stopSelf()
-            return
-        }
         ble = BleManagerHolder.acquire(applicationContext, this)
         profiles = ProfileRepository(applicationContext)
         createNotificationChannel()
@@ -117,6 +150,9 @@ class CoolerService : Service() {
             return
         }
         observeState()
+        // 注册放在 try/catch **之后**：上面提前 stopSelf() 的分支若也注册了，
+        // 就会留下一个没人注销的接收器。
+        registerScreenReceiver()
         scope.launch {
             for (command in commands) {
                 processingStartId = command.startId
@@ -181,6 +217,12 @@ class CoolerService : Service() {
                         ble.setSmartAndAwait(false)
                     if (!sent) showControlFailure()
                 }
+                stopSelfSafely()
+            }
+            ACTION_RELEASE_TO_SYSTEM -> {
+                val released = ble.releaseToSystem()
+                if (!released) Log.e(TAG, "开机安全网：交还系统失败")
+                ble.release()
                 stopSelfSafely()
             }
             ACTION_RECONNECT, null -> {
@@ -274,6 +316,7 @@ class CoolerService : Service() {
     }
 
     override fun onDestroy() {
+        unregisterScreenReceiver()
         commands.close()
         scope.cancel()
         BleManagerHolder.release(this)

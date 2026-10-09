@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -163,6 +164,24 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `onboarding completion is off until it is explicitly persisted`() = runTest {
+        val store = TestPreferencesStore()
+        val repository = SettingsRepository(store)
+
+        // 默认必须是「未完成」：否则首次启动会直接跳过引导。
+        assertFalse(repository.settings.first().onboardingCompleted)
+        assertNull(store.snapshot[booleanPreferencesKey("onboarding_completed")])
+
+        repository.setOnboardingCompleted(true)
+        assertTrue(repository.settings.first().onboardingCompleted)
+        assertEquals(true, store.snapshot[booleanPreferencesKey("onboarding_completed")])
+
+        // 运行检查（复用引导页）不应把完成状态改回去。
+        repository.setDarkMode("dark")
+        assertTrue(repository.settings.first().onboardingCompleted)
+    }
+
+    @Test
     fun `settings read write errors and cancellation propagate unchanged`() = runTest {
         listOf(IOException("disk failure"), CancellationException("cancelled")).forEach { failure ->
             val store = object : DataStore<Preferences> {
@@ -178,6 +197,7 @@ class SettingsRepositoryTest {
             assertSame(failure, expectFailure<Exception> { repository.setPalette("neutral") })
             assertSame(failure, expectFailure<Exception> { repository.setPredictiveBack(false) })
             assertSame(failure, expectFailure<Exception> { repository.setAppLanguage("en") })
+            assertSame(failure, expectFailure<Exception> { repository.setOnboardingCompleted(true) })
         }
     }
 }

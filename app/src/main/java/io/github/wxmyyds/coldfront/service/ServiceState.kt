@@ -78,14 +78,15 @@ internal fun serviceNotification(
 ): ServiceNotification = ServiceNotification(
     text = when {
         state.isConnected && activationFailed -> strings.serviceControlFailed
+        state.isConnected && state.controlError -> strings.homeControlFailedTitle
         state.isConnected && state.telemetryDegraded -> strings.telemetryDegradedTitle
         state.isConnected && state.smartOn -> strings.serviceAutoOn
         state.isConnected -> strings.serviceManual
         state.connection == ConnectionState.CONNECTING ||
             state.connection == ConnectionState.DISCOVERING -> strings.homeConnecting
-        state.connection == ConnectionState.FAILED -> strings.homeConnectionFailed
+        state.connection == ConnectionState.FAILED -> strings.homeFailed
         else -> strings.serviceReconnect
     },
     fanPercent = state.fanPercent,
-    showReconnect = !state.isConnected || activationFailed || state.telemetryDegraded,
+    showReconnect = !state.isConnected || activationFailed || state.telemetryDegraded || state.controlError,
 )

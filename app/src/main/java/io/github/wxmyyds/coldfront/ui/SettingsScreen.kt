@@ -13,15 +13,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.wxmyyds.coldfront.R
 import io.github.wxmyyds.coldfront.data.AppSettings
+import io.github.wxmyyds.coldfront.fan.FanTuning
 import io.github.wxmyyds.coldfront.ui.component.RowIcon
 import io.github.wxmyyds.coldfront.ui.component.PageScaffold
 import io.github.wxmyyds.coldfront.ui.component.SegmentedDropdownRow
+import io.github.wxmyyds.coldfront.ui.component.SegmentedNumberRow
 import io.github.wxmyyds.coldfront.ui.component.SegmentedGroup
 import io.github.wxmyyds.coldfront.ui.component.SegmentedRow
 import io.github.wxmyyds.coldfront.ui.component.SegmentedSwitchRow
@@ -30,20 +30,22 @@ import io.github.wxmyyds.coldfront.data.PaletteStyles
 
 /**
  * 设置页(MD3E 分段选项列表):
- * - 外观组 = 动态取色开关行 + 「主题模式」下拉行；
- * - 通用设置、连接默认设备与关于入口分别成组。
- * 三档主题、三档语言都收成一行 + 下拉菜单：选项本身没有需要常驻展示的信息，
- * 铺成多行只是把页面拉长。
+ * - 外观组 = 动态取色开关行 + 「调色板」「主题模式」下拉行；
+ * - 通用组 = 预测性返回；语言与外观同组；
+ * - 诊断组 = 「运行检查」入口（只读探测 Root / 风扇节点 / 传感器）；
+ * - 关于入口单独成组。
+ *
+ * 已删除「默认连接的设备」：本应用只控制本机内置风扇，不存在可选的连接目标。
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: CoolerViewModel, settings: AppSettings, onAbout: () -> Unit) {
+fun SettingsScreen(
+    vm: CoolerViewModel,
+    settings: AppSettings,
+    onAbout: () -> Unit,
+    onRecheck: () -> Unit,
+) {
     val strings = LocalStrings.current
-    val profiles by vm.profiles.collectAsStateWithLifecycle()
-    val defaultDevice by vm.defaultDevice.collectAsStateWithLifecycle()
-    val defaultDeviceLoaded by vm.defaultDeviceLoaded.collectAsStateWithLifecycle()
-    val defaultDeviceOptions = listOf<String?>(null) + profiles.map { it.id }
-    val defaultDeviceId = defaultDevice?.id
     val dynamicColor = settings.dynamicColor
     val darkMode = settings.darkMode
     val appLanguage = settings.appLanguage
@@ -128,6 +130,18 @@ fun SettingsScreen(vm: CoolerViewModel, settings: AppSettings, onAbout: () -> Un
                         leadingContent = { RowIcon(R.drawable.materialsymbols_ic_dark_mode_rounded_filled) },
                     )
                 }
+                item(key = "language") {
+                    SegmentedDropdownRow(
+                        title = strings.settingsLanguage,
+                        options = languageOptions.map { it.first },
+                        selected = language,
+                        onSelect = { vm.setAppLanguage(it) },
+                        optionLabel = { value ->
+                            languageOptions.firstOrNull { it.first == value }?.second ?: value
+                        },
+                        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_language_rounded_filled) },
+                    )
+                }
             }
 
             SegmentedGroup {
@@ -140,39 +154,60 @@ fun SettingsScreen(vm: CoolerViewModel, settings: AppSettings, onAbout: () -> Un
                         leadingContent = { RowIcon(R.drawable.materialsymbols_ic_swipe_rounded_filled) },
                     )
                 }
-            }
-
-            SegmentedGroup {
-                // 档案文档读完前不渲染：未加载的值不能冒充「不自动连接」。
-                item(key = "defaultDevice", visible = defaultDeviceLoaded) {
+                item(key = "screenOffStop") {
+                    SegmentedSwitchRow(
+                        title = strings.settingsScreenOffStop,
+                        summary = strings.settingsScreenOffStopDesc,
+                        checked = settings.screenOffStopFan,
+                        onCheckedChange = vm::setScreenOffStopFan,
+                        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_bolt_rounded_filled) },
+                    )
+                }
+                item(key = "temperatureSource") {
                     SegmentedDropdownRow(
-                        title = strings.settingsDefaultDevice,
-                        summary = strings.settingsDefaultDeviceDesc,
-                        options = defaultDeviceOptions,
-                        selected = defaultDeviceId,
-                        onSelect = vm::setDefaultDevice,
-                        // 档案被删除时选中值本身已是 null，因此不会出现指向已删设备的文案。
-                        optionLabel = { id ->
-                            id?.let { profileId ->
-                                profiles.firstOrNull { it.id == profileId }?.displayName
-                            } ?: strings.settingsDefaultDeviceOff
-                        },
-                        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_bluetooth_rounded_filled) },
+                        title = strings.settingsTemperatureSource,
+                        // 下标即 [FanNodes.temperatureSources] 的位置：名称表与传感器目录
+                        // 的顺序对齐由 TemperatureSourceNamesTest 钉住。
+                        options = strings.temperatureSourceNames.indices.toList(),
+                        selected = settings.temperatureSource,
+                        onSelect = vm::setTemperatureSource,
+                        optionLabel = { index -> strings.temperatureSourceNames.getOrElse(index) { "" } },
+                        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_speed_rounded_filled) },
                     )
                 }
             }
 
             SegmentedGroup {
-                item(key = "language") {
-                    SegmentedDropdownRow(
-                        title = strings.settingsLanguage,
-                        options = languageOptions.map { it.first },
-                        selected = language,
-                        onSelect = { vm.setAppLanguage(it) },
-                        optionLabel = { value ->
-                            languageOptions.firstOrNull { it.first == value }?.second ?: value
-                        },
-                        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_language_rounded_filled) },
+                item(key = "pollInterval") {
+                    SegmentedNumberRow(
+                        title = strings.settingsPollInterval,
+                        summary = "${strings.settingsPollIntervalDesc} · ${strings.settingsRangeHint} ${FanTuning.MIN_POLL_INTERVAL_MS}–${FanTuning.MAX_POLL_INTERVAL_MS} ms",
+                        value = settings.pollIntervalMs,
+                        valueRange = FanTuning.POLL_INTERVAL_RANGE,
+                        onValueChange = vm::setPollInterval,
+                        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_schedule_rounded_filled) },
+                    )
+                }
+                item(key = "fanTransition") {
+                    SegmentedNumberRow(
+                        title = strings.settingsFanTransition,
+                        summary = "${strings.settingsFanTransitionDesc} · ${strings.settingsRangeHint} ${FanTuning.MIN_TRANSITION_MS}–${FanTuning.MAX_TRANSITION_MS} ms",
+                        value = settings.fanTransitionMs,
+                        valueRange = FanTuning.TRANSITION_RANGE,
+                        onValueChange = vm::setFanTransitionMs,
+                        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_stairs_rounded_filled) },
+                    )
+                }
+            }
+
+            SegmentedGroup {
+                item(key = "recheck") {
+                    SegmentedRow(
+                        title = strings.settingsRecheck,
+                        summary = strings.settingsRecheckDesc,
+                        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_ac_unit_rounded_filled) },
+                        trailingContent = { RowIcon(R.drawable.materialsymbols_ic_chevron_right_rounded_filled) },
+                        onClick = onRecheck,
                     )
                 }
             }

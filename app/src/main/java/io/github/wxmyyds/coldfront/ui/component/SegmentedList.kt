@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +54,11 @@ import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.annotation.DrawableRes
 import androidx.compose.ui.res.painterResource
@@ -73,6 +79,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.round
 import kotlinx.coroutines.flow.collect
 import io.github.wxmyyds.coldfront.R
@@ -570,6 +578,82 @@ fun <T> SegmentedDropdownRow(
             )
         }
     }
+}
+
+/**
+ * 毫秒数字输入行：与设置页的分段列表保持同样的标题/说明/图标布局，
+ * 尾随输入框只接受数字，提交时规范化到 [valueRange]。
+ */
+@Composable
+fun SegmentedNumberRow(
+    title: String,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    valueRange: IntRange,
+    suffix: String = "ms",
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    enabled: Boolean = true,
+    shapes: ListItemShapes? = null,
+    colors: ListItemColors = segmentedRowColors(),
+    leadingContent: (@Composable () -> Unit)? = null,
+) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
+    fun commit() {
+        val parsed = text.toIntOrNull()
+        val normalized = parsed?.coerceIn(valueRange.first, valueRange.last)
+        if (normalized == null) {
+            text = value.toString()
+        } else {
+            text = normalized.toString()
+            if (normalized != value) onValueChange(normalized)
+        }
+    }
+
+    SegmentedRow(
+        title = title,
+        modifier = modifier,
+        summary = summary,
+        enabled = enabled,
+        shapes = shapes,
+        colors = colors,
+        leadingContent = leadingContent,
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BasicTextField(
+                    value = text,
+                    onValueChange = { candidate ->
+                        if (candidate.all { it.isDigit() }) text = candidate
+                    },
+                    enabled = enabled,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.End,
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = {
+                        commit()
+                        focusManager.clearFocus()
+                    }),
+                    modifier = Modifier
+                        .width(82.dp)
+                        .onFocusChanged { if (!it.isFocused) commit() },
+                )
+                Text(
+                    text = suffix,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+        },
+    )
 }
 
 /**

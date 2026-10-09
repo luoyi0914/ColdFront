@@ -31,7 +31,10 @@ import kotlinx.coroutines.launch
 // Tab selection and drag settling share this duration; detail motion belongs to miuix-nav.
 private const val TOP_LEVEL_PAGE_DURATION_MS = 300
 
-/** MAIN owns the selected tab; detail routes never select or animate a tab. */
+/**
+ * 只保留两个顶层页：风扇（控制 + 状态）与设置。
+ * 设备列表 / 蓝牙扫描 / RGB 灯效页已删除 —— 本应用只控制 K90 至尊版内置风扇。
+ */
 @Composable
 internal fun TopLevelPager(
     vm: CoolerViewModel,
@@ -39,24 +42,19 @@ internal fun TopLevelPager(
     isActive: Boolean,
     selectedPage: Int,
     onSelectPage: (Int) -> Unit,
-    onOpenScan: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenRecheck: () -> Unit,
+    onOpenCurve: () -> Unit,
 ) {
     PrimaryPageStrip(
-        pageCount = 4,
+        pageCount = 2,
         selectedPage = selectedPage,
         isActive = isActive,
         onSelectPage = onSelectPage,
     ) { index ->
         when (index) {
-            0 -> HomeScreen(vm, onAddDevice = onOpenScan)
-            1 -> DevicesScreen(vm, onAddDevice = onOpenScan)
-            2 -> RGBControlScreen(
-                vm,
-                isPageActive = isActive && selectedPage == index,
-                onConnect = onOpenScan,
-            )
-            3 -> SettingsScreen(vm, settings, onAbout = onOpenAbout)
+            0 -> HomeScreen(vm, onOpenCurve)
+            else -> SettingsScreen(vm, settings, onAbout = onOpenAbout, onRecheck = onOpenRecheck)
         }
     }
 }

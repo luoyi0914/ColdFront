@@ -158,6 +158,22 @@ data class CoolerLiveState(
     val confirmedConfiguration: Set<UUID> = emptySet(),
     /** A timed-out lane made telemetry uncertain. A new connection resets this warning. */
     val telemetryDegraded: Boolean = false,
+    /** 最近一次控制写入（节点写入或接管）失败；UI 需要如实提示，不能假装成功。 */
+    val controlError: Boolean = false,
+    /**
+     * 靠本应用**主动停转**而停着的风扇（目前只有息屏停转）。
+     *
+     * 与"用户把风扇开关关掉"是两回事：那是用户的决定，这是自动化替他做的决定，
+     * 界面必须能说清风扇为什么停着。
+     */
+    val screenOffStopped: Boolean = false,
+    /**
+     * 曲线已失效并降级交还系统（温度长期读不到等）。
+     *
+     * 与 [telemetryDegraded] 刻意分开：后者只说"数据可能过期"，这里说的是
+     * **控制权已经交出去了**。常驻场景下用户不在看界面，不区分就会以为风扇还归曲线管。
+     */
+    val controlDegraded: Boolean = false,
 ) {
     val isConnected: Boolean get() = connection == ConnectionState.CONNECTED
     val temperatureText: String get() = temperatureC?.let { "%.1f°C".format(it) } ?: "--"

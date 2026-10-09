@@ -228,8 +228,16 @@ class ServiceStateTest {
         assertEquals(strings.serviceManual, serviceNotification(connected, strings, false).text)
         assertEquals(strings.homeConnecting,
             serviceNotification(connected.copy(connection = ConnectionState.CONNECTING), strings, false).text)
-        assertEquals(strings.homeConnectionFailed,
+        assertEquals(strings.homeFailed,
             serviceNotification(connected.copy(connection = ConnectionState.FAILED), strings, false).text)
         assertTrue(serviceNotification(CoolerLiveState(), strings, false).showReconnect)
+    }
+
+    @Test
+    fun `a failed node write surfaces as control failure, not as a normal manual state`() {
+        val strings = stringsFor(Locale.ENGLISH)
+        // 写入失败必须如实反映：不能显示成「智能温控：关」这种一切正常的样子。
+        assertEquals(strings.homeControlFailedTitle, serviceNotification(connected.copy(controlError = true), strings, false).text)
+        assertTrue(serviceNotification(connected.copy(controlError = true), strings, false).showReconnect)
     }
 }

@@ -50,6 +50,10 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0.0"
+        // K90 Ultra / K90 Max are ARMv8 devices. Keep only the native ABI used by them.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     // 仅有完整凭据时才创建 release 签名配置，避免 AGP 因空配置报错

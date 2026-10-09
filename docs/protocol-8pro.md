@@ -1,5 +1,7 @@
 # 红魔散热器 8 Pro BLE 接口
 
+> **本 fork 的运行路径已不经过本文件描述的任何 BLE 协议。** ColdFront 现在控制的是 REDMI K90 至尊版**内置风扇**（root sysfs，见 README「接管时机」与「节点与命令」），设备管理 / 蓝牙扫描 / 灯效页面均已删除。本文件作为上游 8 Pro 散热器的逆向记录保留，仅供查阅，其中的 UUID、特征值语义与校准结论均**未随本次改动复核**。
+>
 > 来源 1:`cn.nubia.externdevice` 官方应用 smali 反编译(`cn/nubia/device/bluetooth/jacket8pro/`)。
 > 来源 2:**实测可用的第三方控制 App**(`com.magcooler.cpucontrol`,特征语义带中文日志)。
 > 两者冲突处以实测为准,已标注。

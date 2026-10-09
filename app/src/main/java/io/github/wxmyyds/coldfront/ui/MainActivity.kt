@@ -1,11 +1,6 @@
 package io.github.wxmyyds.coldfront.ui
 
 import android.Manifest
-import android.bluetooth.BluetoothAdapter
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -46,7 +41,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,9 +52,7 @@ import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.wxmyyds.coldfront.R
-import io.github.wxmyyds.coldfront.ble.BlePermissionManager
 import io.github.wxmyyds.coldfront.data.AppSettings
 import kotlinx.serialization.Serializable
 import top.yukonga.miuix.kmp.nav.core.NavCornerClipMode
@@ -76,7 +68,6 @@ import io.github.wxmyyds.coldfront.ui.theme.RedmagicCoolerTheme
 import io.github.wxmyyds.coldfront.ui.theme.ThemeSeed
 import io.github.wxmyyds.coldfront.ui.theme.colorSchemeFromSeed
 import io.github.wxmyyds.coldfront.ui.theme.pageLayerScheme
-import kotlinx.coroutines.flow.collect
 
 class MainActivity : ComponentActivity() {
 
@@ -128,8 +119,14 @@ class MainActivity : ComponentActivity() {
                 palette = settings.palette,
             ) {
                 SystemBarAppearance(dark)
-                PermissionAndBluetoothEffects(vm)
-                AppNav(vm, settings)
+                PermissionEffects()
+                // 首次启动先走四步引导。引导只做只读检测，完成后写入偏好再进主页；
+                // 设置页里的「运行检查」复用同一个页面（isRecheck = true）。
+                if (settings.onboardingCompleted) {
+                    AppNav(vm, settings)
+                } else {
+                    OnboardingScreen(vm = vm, isRecheck = false, onFinish = {})
+                }
             }
         }
     }
@@ -171,13 +168,12 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun PermissionAndBluetoothEffects(vm: CoolerViewModel) {
-        val context = LocalContext.current
-
-        // 申请扫描 + 通知权限
+    private fun PermissionEffects() {
+        // 只申请通知权限。上游这里还申请 BLE 扫描 + 定位权限——那是给红魔散热器的
+        // 蓝牙扫描用的；本 fork 控制的是 K90 Ultra 的内置风扇，走 root sysfs，
+        // 完全不碰蓝牙，向用户要这些权限只会造成困惑。
         val perms = remember {
             buildList {
-                addAll(BlePermissionManager.scanPermissionsToRequest().toList())
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     add(Manifest.permission.POST_NOTIFICATIONS)
                 }
@@ -185,34 +181,22 @@ class MainActivity : ComponentActivity() {
         }
         val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
             androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
-        ) { vm.refreshBluetoothState() }
-        LaunchedEffect(Unit) { launcher.launch(perms) }
-
-        // 蓝牙开关状态广播
-        DisposableEffect(context, vm) {
-            val receiver = object : BroadcastReceiver() {
-                override fun onReceive(c: Context?, i: Intent?) {
-                    // Query the adapter, never trust state extras from an exported receiver.
-                    if (i?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
-                        vm.refreshBluetoothState()
-                    }
-                }
+        ) { }
+        // 只在「还没授予」且本次界面尚未问过时申请：
+        // 否则每次 Activity 重建（旋转、从设置返回）都会再弹一次系统对话框。
+        val context = LocalContext.current
+        var asked by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        if (perms.isNotEmpty() && !asked && !hasNotificationPermission(context)) {
+            LaunchedEffect(Unit) {
+                asked = true
+                launcher.launch(perms)
             }
-            val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // Bluetooth broadcasts can originate in a privileged process outside the system UID.
-                context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.registerReceiver(receiver, filter)
-            }
-            onDispose { runCatching { context.unregisterReceiver(receiver) } }
         }
     }
 }
 
 /**
- * Destinations owned by miuix-nav. [Main] hosts the four tabs; everything else is a detail page
+ * Destinations owned by miuix-nav. [Main] hosts the two tabs; everything else is a detail page
  * drawn above it. Data objects keep `rememberSaveable` stable across process death.
  */
 @Serializable
@@ -221,14 +205,19 @@ private sealed interface AppRoute : NavKey {
     data object Main : AppRoute
 
     @Serializable
-    data object Scan : AppRoute
-
-    @Serializable
     data object About : AppRoute
+
+    /** 设置里的「运行检查」——复用引导页，但不写完成状态。 */
+    @Serializable
+    data object Recheck : AppRoute
+
+    /** 首页「智能温控」行进入的温控曲线编辑页。 */
+    @Serializable
+    data object Curve : AppRoute
 }
 
 /**
- * The four primary tabs, inside the top-level destination.
+ * The two primary tabs, inside the top-level destination.
  *
  * [WindowInsets.navigationBars] is consumed here rather than by an outer layout: the bar that draws
  * over that inset is now a sibling of this content inside MAIN, so the two belong to one page and
@@ -241,8 +230,9 @@ private fun MainPage(
     isActive: Boolean,
     selectedPage: Int,
     onSelectPage: (Int) -> Unit,
-    onOpenScan: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenRecheck: () -> Unit,
+    onOpenCurve: () -> Unit,
 ) {
     val contentInsets = WindowInsets.navigationBars
     // windowInsetsPadding, not padding(insets): WindowInsets is not a PaddingValues, and converting
@@ -258,8 +248,9 @@ private fun MainPage(
             isActive = isActive,
             selectedPage = selectedPage,
             onSelectPage = onSelectPage,
-            onOpenScan = onOpenScan,
             onOpenAbout = onOpenAbout,
+            onOpenRecheck = onOpenRecheck,
+            onOpenCurve = onOpenCurve,
         )
     }
 }
@@ -267,8 +258,6 @@ private fun MainPage(
 /** Identifies the primary tabs inside the pager; these are not NavHost routes. */
 private object TabRoutes {
     const val HOME = "home"
-    const val DEVICES = "devices"
-    const val RGB = "rgb"
     const val SETTINGS = "settings"
 }
 
@@ -281,32 +270,9 @@ private data class TabItem(
 
 @Composable
 private fun AppNav(vm: CoolerViewModel, settings: AppSettings) {
-    val nav = rememberNavController<AppRoute>(AppRoute.Main)
+    val nav = top.yukonga.miuix.kmp.nav.core.rememberNavController(AppRoute.Main)
     val strings = LocalStrings.current
-    val current = nav.backStack.lastOrNull()
-
-    // 连接成功后自动离开扫描页,回主页看状态(避免连上后停在列表里像「没反应」)
-    val liveState by vm.liveState.collectAsStateWithLifecycle()
     val predictiveBack = settings.predictiveBack
-    // Include the session even if lifecycle collection skipped reconnect's intermediate states.
-    // Never key on route: an already-connected user must still be able to open scan.
-    val connectionKey = connectionNavigationKey(liveState)
-    // Compare against the restored observation, not an unconditional first-effect skip: a new
-    // connection may have succeeded during recreation, while the same session must keep Scan open.
-    var lastConnectionKey by rememberSaveable(stateSaver = ConnectionNavigationKeySaver) {
-        mutableStateOf(connectionKey)
-    }
-    LaunchedEffect(connectionKey) {
-        if (shouldLeaveScanOnConnection(
-                previous = lastConnectionKey,
-                current = connectionKey,
-                isScanDestination = current == AppRoute.Scan,
-            )
-        ) {
-            nav.popUntil { it == AppRoute.Main }
-        }
-        lastConnectionKey = connectionKey
-    }
 
     val open = { route: AppRoute ->
         if (nav.backStack.lastOrNull() != route) nav.push(route)
@@ -323,24 +289,6 @@ private fun AppNav(vm: CoolerViewModel, settings: AppSettings) {
                     )
                 },
             ) { strings.navHome },
-            TabItem(
-                TabRoutes.DEVICES,
-                {
-                    Icon(
-                        painterResource(if (it) R.drawable.materialsymbols_ic_devices_other_rounded_filled else R.drawable.materialsymbols_ic_devices_other_rounded),
-                        contentDescription = null,
-                    )
-                },
-            ) { strings.navDevices },
-            TabItem(
-                TabRoutes.RGB,
-                {
-                    Icon(
-                        painterResource(if (it) R.drawable.materialsymbols_ic_palette_rounded_filled else R.drawable.materialsymbols_ic_palette_rounded),
-                        contentDescription = null,
-                    )
-                },
-            ) { strings.navRgb },
             // 设置 tab 用 Rounded 齿轮：选中 Fill、未选中 outline，由 NavigationBar/Rail 的选中态驱动。
             TabItem(
                 TabRoutes.SETTINGS,
@@ -353,15 +301,11 @@ private fun AppNav(vm: CoolerViewModel, settings: AppSettings) {
             ) { strings.navSettings },
         )
     }
-    // The four tabs identify pages inside the pager, so they are not navigation destinations.
+    // Tabs identify pages inside the pager, so they are not navigation destinations.
     val tabRoutes = remember(items) { items.map { it.route } }
-    // The four primary tabs are pages inside Main, not destinations of their own, so the selected
-    // tab is its own state. It survives a push of a secondary page, which is what keeps the tab
-    // strip showing the same page underneath after returning.
     val selectedPage = rememberSaveable { mutableIntStateOf(0) }
 
     // Switching tabs stays inside Main: no navigation, so no transition and no predictive back.
-    // The strip animates itself.
     val navigateToTab: (String) -> Unit = { route ->
         tabRoutes.indexOf(route)
             .takeIf { it >= 0 }
@@ -369,32 +313,31 @@ private fun AppNav(vm: CoolerViewModel, settings: AppSettings) {
     }
 
     // Use existing foundation/Material3 APIs, without adding a window-size dependency.
-    // Keep one NavDisplay at the same composition location across window resizing.
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val useRail = maxWidth >= 600.dp
-        val topLevelIsCurrent = current == null || current == AppRoute.Main
+        val topLevelIsCurrent = nav.backStack.lastOrNull()?.let { it == AppRoute.Main } ?: true
         val cornerRadius = rememberScreenCornerRadius()
         val chrome = @Composable {
             if (!useRail) {
-                    NavigationBar(
-                        modifier = Modifier.semantics { isTraversalGroup = true },
-                        containerColor = MaterialTheme.colorScheme.background,
-                        tonalElevation = 0.dp,
-                        windowInsets = WindowInsets.navigationBars.union(
-                            WindowInsets(left = 0.dp, top = 0.dp, right = 0.dp, bottom = 12.dp),
-                        ),
-                    ) {
-                        items.forEach { item ->
-                            val itemSelected = tabRoutes.getOrNull(selectedPage.intValue) == item.route
-                            NavigationBarItem(
-                                selected = itemSelected,
-                                onClick = { navigateToTab(item.route) },
-                                // Label + native selectable semantics announce the destination once.
-                                icon = { item.icon(itemSelected) },
-                                label = { Text(item.label()) },
-                            )
-                        }
+                NavigationBar(
+                    modifier = Modifier.semantics { isTraversalGroup = true },
+                    containerColor = MaterialTheme.colorScheme.background,
+                    tonalElevation = 0.dp,
+                    windowInsets = WindowInsets.navigationBars.union(
+                        WindowInsets(left = 0.dp, top = 0.dp, right = 0.dp, bottom = 12.dp),
+                    ),
+                ) {
+                    items.forEach { item ->
+                        val itemSelected = tabRoutes.getOrNull(selectedPage.intValue) == item.route
+                        NavigationBarItem(
+                            selected = itemSelected,
+                            onClick = { navigateToTab(item.route) },
+                            // Label + native selectable semantics announce the destination once.
+                            icon = { item.icon(itemSelected) },
+                            label = { Text(item.label()) },
+                        )
                     }
+                }
             } else {
                 NavigationRail(
                     modifier = Modifier
@@ -406,7 +349,6 @@ private fun AppNav(vm: CoolerViewModel, settings: AppSettings) {
                     Column(
                         modifier = Modifier.verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        // Match NavigationRail's native spacing inside the scroll container.
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         items.forEach { item ->
@@ -445,8 +387,9 @@ private fun AppNav(vm: CoolerViewModel, settings: AppSettings) {
                                         isActive = topLevelIsCurrent,
                                         selectedPage = selectedPage.intValue,
                                         onSelectPage = { selectedPage.intValue = it },
-                                        onOpenScan = { open(AppRoute.Scan) },
                                         onOpenAbout = { open(AppRoute.About) },
+                                        onOpenRecheck = { open(AppRoute.Recheck) },
+                                        onOpenCurve = { open(AppRoute.Curve) },
                                     )
                                 }
                                 chrome()
@@ -460,21 +403,26 @@ private fun AppNav(vm: CoolerViewModel, settings: AppSettings) {
                                         isActive = topLevelIsCurrent,
                                         selectedPage = selectedPage.intValue,
                                         onSelectPage = { selectedPage.intValue = it },
-                                        onOpenScan = { open(AppRoute.Scan) },
                                         onOpenAbout = { open(AppRoute.About) },
+                                        onOpenRecheck = { open(AppRoute.Recheck) },
+                                        onOpenCurve = { open(AppRoute.Curve) },
                                     )
                                 }
                                 chrome()
                             }
                         }
                     }
-                    entry<AppRoute.Scan> {
-                        if (!predictiveBack) BackHandler { nav.pop() }
-                        AddDeviceScreen(vm, onBack = { nav.pop() })
-                    }
                     entry<AppRoute.About> {
                         if (!predictiveBack) BackHandler { nav.pop() }
                         AboutScreen(onBack = { nav.pop() })
+                    }
+                    entry<AppRoute.Recheck> {
+                        if (!predictiveBack) BackHandler { nav.pop() }
+                        OnboardingScreen(vm = vm, isRecheck = true, onFinish = { nav.pop() })
+                    }
+                    entry<AppRoute.Curve> {
+                        if (!predictiveBack) BackHandler { nav.pop() }
+                        CurveScreen(vm = vm, settings = settings, onBack = { nav.pop() })
                     }
                 }
             }
