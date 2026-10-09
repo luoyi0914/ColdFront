@@ -1,0 +1,72 @@
+name: Publish K90 APK
+
+# 只发布「可直接安装的 debug 签名 APK」，因此不需要任何签名密钥 Secret。
+# 正式签名发布仍由 release-stable.yml（需要 COLDFRONT_KEYSTORE_* Secrets）负责。
+#
+# 触发：推送到 main，或在 Actions 页面手动 Run workflow。
+# 产物：Release `v<versionName>-k90u`，附件 `ColdFront-v<versionName>-k90u-debug.apk`。
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-k90-apk
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build debug APK and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle (with dependency cache)
+        uses: gradle/actions/setup-gradle@v6
+
+      # compileSdk 37.1 可能不在 runner 预装 SDK 里，先接受许可以便 AGP 自动补装
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -oP 'versionName\s*=\s*"\K[0-9.]+' app/build.gradle.kts)
+          TAG="v${VERSION}-k90u"
+          ASSET="ColdFront-v${VERSION}-k90u-debug.apk"
+          NOTES="docs/release-notes-k90u.md"
+
+          test -f app/build/outputs/apk/debug/app-debug.apk \
+            || { echo "::error::未生成 debug APK"; ls -l app/build/outputs/apk/debug/ || true; exit 1; }
+          cp app/build/outputs/apk/debug/app-debug.apk "$ASSET"
+          ls -l "$ASSET"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在：覆盖附件并刷新说明"
+            gh release upload "$TAG" "$ASSET" --clobber
+            gh release edit "$TAG" --title "ColdFront v${VERSION}-k90u" --notes-file "$NOTES"
+          else
+            echo "创建 Release $TAG"
+            gh release create "$TAG" "$ASSET" \
+              --title "ColdFront v${VERSION}-k90u" \
+              --notes-file "$NOTES" \
+              --latest
+          fi
+
+          gh release view "$TAG"
