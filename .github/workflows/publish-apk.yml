@@ -47,7 +47,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          VERSION=$(grep -oP 'versionName\s*=\s*"\K[0-9.]+' app/build.gradle.kts)
+          # 版本号是构建时按当天日期算出来的（yy.MM.dd-n），源码里没有字面量可 grep，
+          # 唯一权威是构建产物 BuildConfig。
+          VERSION=$(grep -oP 'VERSION_NAME\s*=\s*"\K[^"]+' \
+            app/build/generated/source/buildConfig/debug/io/github/wxmyyds/coldfront/BuildConfig.java)
           TAG="v${VERSION}-k90u"
           ASSET="ColdFront-v${VERSION}-k90u-debug.apk"
           NOTES="docs/release-notes-k90u.md"

@@ -108,6 +108,7 @@ class SettingsRepository internal constructor(private val dataStore: DataStore<P
         dataStore.edit { it[KEY_FAN_TRANSITION_MS] = FanTuning.transitionMsOrDefault(ms) }
     }
 
+
     private fun darkModeOrDefault(value: String?): String = when (value) {
         "system", "light", "dark" -> value
         else -> "system"

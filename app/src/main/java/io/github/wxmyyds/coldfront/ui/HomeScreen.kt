@@ -202,7 +202,7 @@ private fun ConnectedContent(
         enabled = state.isConnected,
         shapes = staticStandaloneRowShapes(),
         onCheckedChange = vm::setCooling,
-        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_ac_unit_rounded_filled) },
+        leadingContent = { RowIcon(R.drawable.ic_fan_five_blade) },
     )
 
     SegmentedGroup {
@@ -292,7 +292,7 @@ private fun NotReadyContent(
         ) {
             Box(modifier = Modifier.size(112.dp), contentAlignment = Alignment.Center) {
                 Icon(
-                    painterResource(R.drawable.materialsymbols_ic_ac_unit_rounded_filled),
+                    painterResource(R.drawable.ic_fan_five_blade),
                     contentDescription = null,
                     modifier = Modifier.size(56.dp),
                     tint = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,

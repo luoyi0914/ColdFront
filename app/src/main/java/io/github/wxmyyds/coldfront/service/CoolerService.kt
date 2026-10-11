@@ -82,6 +82,9 @@ class CoolerService : Service() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)
         }
+
+        /** 服务实例只用于同进程投递，不导出、不跨进程共享。 */
+        @Volatile private var running: CoolerService? = null
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -138,12 +141,20 @@ class CoolerService : Service() {
         profiles = ProfileRepository(applicationContext)
         createNotificationChannel()
         try {
-            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            } else 0
+            // Android 14+ 会校验前台服务类型对应的权限：connectedDevice 要求实际持有
+            // BLUETOOTH_CONNECT/SCAN 等权限，而本应用改造为内置风扇后已不再申请蓝牙权限，
+            // 于是 startForeground 抛 RemoteException（validateForegroundServiceType）。
+            // 内置风扇控制改用 specialUse（API 34+）；旧版本没有这项校验，沿用 connectedDevice。
+            val type = when {
+                Build.VERSION.SDK_INT >= 34 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ->
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                else -> 0
+            }
             val waiting = ServiceNotification(strings.serviceWaitingConfig, 0, showReconnect = true)
             ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(waiting), type)
             acceptedStartup = true
+            running = this
         } catch (e: RuntimeException) {
             Log.e(TAG, "Cannot enter foreground", e)
             stopSelf()
@@ -316,6 +327,7 @@ class CoolerService : Service() {
     }
 
     override fun onDestroy() {
+        if (running === this) running = null
         unregisterScreenReceiver()
         commands.close()
         scope.cancel()

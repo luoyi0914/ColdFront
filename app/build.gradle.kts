@@ -1,10 +1,54 @@
 import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+// ---------- 版本号：yy.mm.dd-n ----------
+// 年月日 + **当天第几版**。日期在**配置阶段读取当前系统日期**，所以同一天多次构建
+// 自动递增 n，跨天自动归 1，不需要手工改任何东西。
+//
+// 计数依据是"今天已经发布出去的 APK 编号"而不是 Gradle 缓存：落盘在
+// `app/build/version-counter.properties`（构建产物目录，clean 后归零是预期行为）。
+// 用昨天的日期做 key 就会重新从 1 开始，无需显式清理。
+//
+// 为什么不用 Gradle 的 buildNumber 或时间戳：
+//   - 时间戳（yyyyMMddHHmm）不可读，且同一分钟内并发构建会撞号；
+//   - CI 的 run number 全局递增，跨天不会归 1，和"当天第几版"的语义不符。
+val versionDate: LocalDate = LocalDate.now(ZoneId.systemDefault())
+val versionDateKey: String = versionDate.format(DateTimeFormatter.ofPattern("yy.MM.dd"))
+
+val versionCounterFile = layout.buildDirectory.file("version-counter.properties").get().asFile
+
+/** 当天版本序号。同一天第一次构建为 1，之后每次 +1；换天自动重置。 */
+val buildSerialForToday: Int = run {
+    val props = Properties()
+    if (versionCounterFile.isFile) {
+        versionCounterFile.inputStream().use { props.load(it) }
+    }
+    val next = (props.getProperty(versionDateKey)?.toIntOrNull() ?: 0) + 1
+    props.setProperty(versionDateKey, next.toString())
+    versionCounterFile.parentFile.mkdirs()
+    versionCounterFile.outputStream().use { props.store(it, "ColdFront build serial per day") }
+    next
+}
+
+val coldfrontVersionName = "$versionDateKey-$buildSerialForToday"
+
+/**
+ * versionCode 必须**单调递增**，否则系统拒绝安装（INSTALL_FAILED_VERSION_DOWNGRADE）。
+ * 版本名 yy.MM.dd-n 直接映射成整数：yymmdd * 100 + n
+ * （例：26.10.11-3 → 26101103）。n 上限 99，超过也只是数值继续涨，不会回绕。
+ */
+val coldfrontVersionCode = versionDateKey.replace(".", "").toInt() * 100 + buildSerialForToday
+
+logger.lifecycle("ColdFront 版本：$coldfrontVersionName (versionCode $coldfrontVersionCode)")
 
 // ---------- Release 签名 ----------
 // 密钥库与口令不入库，只在构建时注入：
@@ -48,8 +92,8 @@ android {
         applicationId = "io.github.wxmyyds.coldfront"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = coldfrontVersionCode
+        versionName = coldfrontVersionName
         // K90 Ultra / K90 Max are ARMv8 devices. Keep only the native ABI used by them.
         ndk {
             abiFilters += "arm64-v8a"

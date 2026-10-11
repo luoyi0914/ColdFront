@@ -205,7 +205,7 @@ fun SettingsScreen(
                     SegmentedRow(
                         title = strings.settingsRecheck,
                         summary = strings.settingsRecheckDesc,
-                        leadingContent = { RowIcon(R.drawable.materialsymbols_ic_ac_unit_rounded_filled) },
+                        leadingContent = { RowIcon(R.drawable.ic_fan_five_blade) },
                         trailingContent = { RowIcon(R.drawable.materialsymbols_ic_chevron_right_rounded_filled) },
                         onClick = onRecheck,
                     )

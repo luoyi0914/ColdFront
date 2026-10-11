@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 五叶风扇：快捷设置磁贴与列表行共用。24dp 网格，几何以原点为中心，故整体平移 +100。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <group
+        android:translateX="100"
+        android:translateY="100">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M 2.34 16.64 C 30.78 39.4, 3.72 96.93, -27.56 96.13 C -40 86.17, -28.32 36.25, -2.34 16.64 A 16.8 16.8 0 0 1 2.34 16.64 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M -15.1 7.36 C -27.96 41.45, -91.03 33.49, -99.94 3.49 C -94.31 -11.41, -43.23 -15.73, -16.54 2.92 A 16.8 16.8 0 0 1 -15.1 7.36 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M -11.67 -12.08 C -48.06 -13.78, -59.99 -76.23, -34.2 -93.97 C -18.29 -93.22, 1.61 -45.97, -7.89 -14.83 A 16.8 16.8 0 0 1 -11.67 -12.08 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M 7.89 -14.83 C -1.74 -49.97, 53.96 -80.61, 78.8 -61.57 C 83.01 -46.2, 44.22 -12.68, 11.67 -12.08 A 16.8 16.8 0 0 1 7.89 -14.83 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M 16.54 2.92 C 46.98 -17.1, 93.34 26.41, 82.9 55.92 C 69.59 64.67, 25.72 38.14, 15.1 7.36 A 16.8 16.8 0 0 1 16.54 2.92 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M 23.0 0 A 23.0 23.0 0 1 0 -23.0 0 A 23.0 23.0 0 1 0 23.0 0 Z M 11.0 0 A 11.0 11.0 0 1 1 -11.0 0 A 11.0 11.0 0 1 1 11.0 0 Z" />
+    </group>
+</vector>

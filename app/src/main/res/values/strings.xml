@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  仅用于 Manifest 的 android:label（必须是资源引用，不能写死文字）。
+  运行时的全部文案仍在 ui/i18n/Strings.kt —— 那里按应用内语言偏好选择中文/英文，
+  而 QS 磁贴的 label 是系统在绑定服务时读取的，走的是系统语言这条路。
+  磁贴标签在运行时会由 SystemFanTileService 按应用内语言再覆盖一次。
+-->
+<resources>
+    <string name="tile_fan_label">风扇控制</string>
+</resources>

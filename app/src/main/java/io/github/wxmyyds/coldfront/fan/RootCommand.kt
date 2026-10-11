@@ -1,5 +1,6 @@
 package io.github.wxmyyds.coldfront.fan
 
+import android.os.Build
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
@@ -32,6 +33,10 @@ data class RootResult(
  *
  * 关键点三：`waitFor`/`join` 抛出的 `InterruptedException` 必须单独处理 ——
  * 否则会被外层 catch 变成「没有 su」这类错误结论。中断时保留中断标志并如实报告超时。
+ *
+ * 关键点四：`Process.waitFor(timeout, unit)` 与 `Process.destroyForcibly()` 都是
+ * API 26 才加入的，而本模块 minSdk = 24（沿用上游）。这里用显式的版本分支提供兼容
+ * 实现，而不是把 minSdk 抬到 26：API 24/25 上用 `exitValue()` 轮询表达同样的语义。
  */
 internal fun executeProcess(command: List<String>, timeoutMs: Long): RootResult {
     var process: Process? = null
@@ -57,7 +62,7 @@ internal fun executeProcess(command: List<String>, timeoutMs: Long): RootResult 
 
         var completed = false
         try {
-            completed = running.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+            completed = running.waitForCompat(timeoutMs)
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
             completed = false
@@ -67,11 +72,11 @@ internal fun executeProcess(command: List<String>, timeoutMs: Long): RootResult 
             running.destroy()
             var dead = false
             try {
-                dead = running.waitFor(300, TimeUnit.MILLISECONDS)
+                dead = running.waitForCompat(300)
             } catch (interrupted: InterruptedException) {
                 Thread.currentThread().interrupt()
             }
-            if (!dead) runCatching { running.destroyForcibly() }
+            if (!dead) runCatching { running.destroyForciblyCompat() }
             // 关掉读端：即使子 shell 仍持有写端，抽取线程也会立刻拿到 EOF 而退出。
             runCatching { running.inputStream.close() }
         }
@@ -98,3 +103,44 @@ internal fun executeProcess(command: List<String>, timeoutMs: Long): RootResult 
 }
 
 private const val OUTPUT_LIMIT = 32 * 1024
+
+/** API 24/25 上 `exitValue()` 轮询的间隔。进程通常几十毫秒内就退出，5 ms 足够且开销可忽略。 */
+private const val WAIT_POLL_MS = 5L
+
+/**
+ * `Process.waitFor(timeout, unit)` 的跨版本等价实现。
+ *
+ * API 26 起直接用系统实现；API 24/25 没有带超时的 `waitFor`，且 `isAlive()` 同样是
+ * API 26 才有的，因此只能靠 `exitValue()` 抛 `IllegalThreadStateException` 来判断
+ * 进程是否仍在运行。语义与带超时的 `waitFor` 一致：退出返回 true，超时返回 false。
+ *
+ * 与调用处一样，`Thread.sleep` 抛出的 `InterruptedException` 不做捕获，交由调用方处理。
+ */
+private fun Process.waitForCompat(timeoutMs: Long): Boolean {
+    if (Build.VERSION.SDK_INT >= 26) {
+        return waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+    }
+    val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+    while (true) {
+        if (!isAliveCompat()) return true
+        if (System.nanoTime() >= deadline) return false
+        Thread.sleep(WAIT_POLL_MS)
+    }
+}
+
+/** API 26 起 `isAlive()` 可用；更早的版本只能用 `exitValue()` 是否抛异常来判断。 */
+private fun Process.isAliveCompat(): Boolean =
+    try {
+        exitValue()
+        false
+    } catch (ignored: IllegalThreadStateException) {
+        true
+    }
+
+/**
+ * `destroyForcibly()` 是 API 26 才有的。API 24/25 退化为 `destroy()`：
+ * 发不出 SIGKILL，但调用处紧接着会关闭读端，抽取线程不会因此挂死。
+ */
+private fun Process.destroyForciblyCompat() {
+    if (Build.VERSION.SDK_INT >= 26) destroyForcibly() else destroy()
+}

@@ -172,6 +172,15 @@ interface AppStrings {
     val controlDegradedTitle: String
     val controlDegradedHint: String
 
+    // —— 快捷设置磁贴：风扇总开关 ——
+    /**
+     * 磁贴标签。**不随后状态变化**：这是总开关，标签描述"它是什么"，
+     * 开/关由磁贴的点亮态表达，跟随状态改名字反而让人每次都要重读一遍。
+     */
+    val tileFanMaster: String
+    /** 磁贴切换失败时的提示。 */
+    val tileFanFailed: String
+
     // —— 轮询间隔与升降过渡 ——
     val settingsPollInterval: String
     val settingsPollIntervalDesc: String
@@ -332,6 +341,9 @@ object ZhStrings : AppStrings {
     override val settingsRangeHint = "可用范围"
     override val controlDegradedTitle = "已交回系统管理"
     override val controlDegradedHint = "连续读不到温度，曲线已停止接管，风扇交回系统策略。请运行检查确认温度传感器可读。"
+
+    override val tileFanMaster = "风扇控制"
+    override val tileFanFailed = "风扇开关切换失败，请确认已授予 Root 权限"
 }
 
 object EnStrings : AppStrings {
@@ -486,6 +498,9 @@ object EnStrings : AppStrings {
     override val settingsRangeHint = "Allowed range"
     override val controlDegradedTitle = "Handed back to the system"
     override val controlDegradedHint = "The temperature became unreadable, so the curve stopped driving the fan and the system took over. Run the checks to confirm the sensor is readable."
+
+    override val tileFanMaster = "Fan control"
+    override val tileFanFailed = "Could not toggle the fan; make sure root access is granted"
 }
 
 /**

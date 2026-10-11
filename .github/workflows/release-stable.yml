@@ -44,59 +44,57 @@ jobs:
 
       # 发布分支模型：main 保持干净（版本号不动），版本号只落在 release 分支。
       # 每次发布 = main 最新代码 + 版本号升级，同步到 release 分支后打 tag。
-      # 基准版本取 release 分支（最近一次发布）上的值，versionCode 才能单调递增；
-      # 首次发布（尚无 release 分支）退化为 main 上的版本号。
+      #
+      # 版本号自 v26.10.11 起改为**构建时按当天日期生成**（yy.MM.dd-n），源码里不再有
+      # versionName/versionCode 字面量可以 sed。因此本步骤不再改写 build.gradle.kts，
+      # 而是直接跑一次 Gradle 把当天版本号问出来，再决定这次发布用哪个号。
       - name: Resolve version
         id: resolve
         shell: bash
         run: |
           set -euo pipefail
-          # 注意：grep 无匹配时退出 1，在 set -e 下会静默终结整步（本步骤曾因漏写文件参数而零输出失败），
-          # 故一律用 || true 兜住，改由下方显式校验并报出可读错误。
-          if git rev-parse origin/release >/dev/null 2>&1; then
-            CUR=$(git show origin/release:app/build.gradle.kts | grep -oP 'versionName\s*=\s*"\K[0-9.]+' || true)
-            CODE=$(git show origin/release:app/build.gradle.kts | grep -oP 'versionCode\s*=\s*\K[0-9]+' || true)
-            echo "最近发布（release 分支）：v$CUR（versionCode $CODE）"
-          else
-            CUR=$(grep -oP 'versionName\s*=\s*"\K[0-9.]+' app/build.gradle.kts || true)
-            CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts || true)
-            echo "首次发布（尚无 release 分支）：main 版本 v$CUR（versionCode $CODE）"
+          # 权威来源：Gradle 构建脚本在配置阶段打印的那一行（含 versionName 与 versionCode）。
+          # 直接问构建脚本，而不是重新实现一遍日期逻辑——两处算法迟早会漂移。
+          GEN=$(./gradlew --quiet :app:properties 2>/dev/null | grep -oP 'coldfrontVersionName: \K.*' || true)
+          if [ -z "$GEN" ]; then
+            # 退路：跑一次真实的配置阶段，从 lifecycle 日志里抓。
+            GEN=$(./gradlew :app:tasks --quiet 2>&1 | grep -oP 'ColdFront 版本：\K[0-9.]+-[0-9]+' | head -1 || true)
           fi
-          if [ -z "$CUR" ] || [ -z "$CODE" ]; then
-            echo "::error::无法解析版本号（CUR='$CUR' CODE='$CODE'），检查 app/build.gradle.kts 的 versionName/versionCode"
+          if [ -z "$GEN" ]; then
+            echo "::error::无法取得构建生成的版本号（Gradle 未输出 ColdFront 版本行）"
             exit 1
           fi
-          INPUT="${{ inputs.version }}"
-          if [ -z "$INPUT" ]; then
-            # 留空仅在首次发布时可用（对应 main 上的初始版本号）
-            if git rev-parse origin/release >/dev/null 2>&1; then
-              echo "请填写新版本号：最近一次发布为 v$CUR，该版本已打 tag，不能重复发布"
-              exit 1
-            fi
-            echo "留空：使用 main 当前版本 v$CUR（首次发布）"
-            VERSION="$CUR"; NEW_CODE="$CODE"; BUMPED=false
+          GEN_CODE=$(echo "$GEN" | sed 's/.*-//')
+          GEN_DATE=$(echo "$GEN" | sed 's/-.*//')
+          echo "构建生成版本：v$GEN（当天第 $GEN_CODE 版，日期 $GEN_DATE）"
+
+          if git rev-parse origin/release >/dev/null 2>&1; then
+            CUR=$(git show origin/release:app/build.gradle.kts | grep -oP 'GEN_VERSION_FALLBACK\s*=\s*"\K[^"]+' || true)
+            [ -n "$CUR" ] || CUR=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null | sed 's/^v//' || true)
+            echo "最近发布（release 分支 / 最近 tag）：v$CUR"
           else
-            [[ "$INPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "版本号格式错误：$INPUT（需 X.Y.Z）"; exit 1; }
-            # 新版本必须高于最近发布版本（sort -V 语义比较）
-            if ! printf '%s\n%s\n' "$CUR" "$INPUT" | sort -V | tail -1 | grep -Fxq "$INPUT"; then
-              echo "新版本 $INPUT 不高于最近发布 $CUR，拒绝发布"
-              exit 1
-            fi
-            NEW_CODE=$((CODE + 1))
-            sed -i "s/versionName = \".*\"/versionName = \"$INPUT\"/" app/build.gradle.kts
-            sed -i "s/versionCode = [0-9]*/versionCode = $NEW_CODE/" app/build.gradle.kts
-            VERSION="$INPUT"; BUMPED=true
-            echo "已写入 versionName=$VERSION, versionCode=$NEW_CODE"
-            git diff -- app/build.gradle.kts
+            CUR=""
+            echo "首次发布（尚无 release 分支）"
           fi
+
+          INPUT="${{ inputs.version }}"
+          if [ -n "$INPUT" ]; then
+            # 人工指定时沿用旧格式校验，并把它作为**发布用的 tag 名**，
+            # 但 APK 内的 versionName 仍是构建生成值（构建脚本说了算）。
+            [[ "$INPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "版本号格式错误：$INPUT（需 X.Y.Z）"; exit 1; }
+            VERSION="$INPUT"
+          else
+            VERSION="$GEN"
+          fi
+
           # tag 去重，防重复发布
           if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
             echo "tag v${VERSION} 已存在，拒绝重复发布"
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "versionCode=$NEW_CODE" >> "$GITHUB_OUTPUT"
-          echo "bumped=$BUMPED" >> "$GITHUB_OUTPUT"
+          echo "versionCode=$GEN_CODE" >> "$GITHUB_OUTPUT"
+          echo "bumped=true" >> "$GITHUB_OUTPUT"
 
       - name: Compile debug and release sources
         run: ./gradlew compileDebugKotlin compileReleaseKotlin --stacktrace

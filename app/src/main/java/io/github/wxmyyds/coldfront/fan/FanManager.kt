@@ -88,6 +88,23 @@ class FanManager(private val context: Context) : CoolerTransport {
 
     private var controlMode = ControlMode.MANUAL
 
+    /**
+     * 风扇开关关闭前**正在跑的模式**，用于重开时恢复。
+     *
+     * 「风扇开关」在语义上是**总电源**，不是"切到手动档"：
+     * 关掉它只是让风扇停转，用户对调速策略的选择（智能温控 / 手动档位 / 满速）
+     * 并没有被撤销，所以重开时必须回到原来的模式。少了这个"记忆"，
+     * 用户关一次风扇就会丢掉辛苦调好的智能温控，必须再手点一次开关才能找回来。
+     *
+     * 只在进入 [ControlMode.OFF] 时冻结，且在**每次落入非 OFF 模式时刷新**；
+     * 因此它永远描述"用户最后主动选择的那个运行模式"。
+     *
+     * 刻意**不持久化**：硬件控制状态本身不跨进程存活（[controlMode] 也是内存态），
+     * 重启后由前台服务重新接管并按自己的意图写模式；一个落盘的旧模式反而会在
+     * 下次启动时与服务的实际意图打架。这里要修的是同一次会话内的开关往返。
+     */
+    private var lastActiveMode = ControlMode.MANUAL
+
     /** 已挂载：Root 可用且风扇节点可读。**不代表已经接管硬件**。 */
     private var attached = false
 
@@ -179,6 +196,8 @@ class FanManager(private val context: Context) : CoolerTransport {
     init {
         // 只订阅偏好，不碰任何硬件节点：「读取曲线」本身不是接管。
         scope.launch {
+            // 联动开关的**边沿**才需要动硬件：每次设置回流都写一遍 sysfs 会让
+            // DataStore 的任何无关变更（改个语言、调个轮询间隔）都去抢一次控制权。
             settingsRepository.settings.collect { settings ->
                 smartCurve = settings.smartCurve
                 temperatureSource = settings.temperatureSource
@@ -394,17 +413,28 @@ class FanManager(private val context: Context) : CoolerTransport {
         }
     }
 
-    /** 风扇总开关：关 = 停转；开 = 恢复到静谧档。 */
+    /**
+     * 风扇总开关：关 = 停转；开 = **恢复到关闭前的模式**（见 [lastActiveMode]）。
+     *
+     * 开关本身不理解也不想覆盖调速策略，所以：
+     * - 关：先记下当前正在跑的模式，再落到 [ControlMode.OFF]；
+     * - 开：按记下的模式恢复 —— 原来在智能温控就回到温控（并按曲线重新开始调速），
+     *   原来在满速就回到满速，否则回到手动静谧档。
+     *
+     * 只有"原来就是 OFF"这种情况没有可恢复的模式，才退回静谧档。
+     */
     override fun setCooling(on: Boolean) {
         scope.launch {
+            // 关闭前先快照当前模式：进入 OFF 之后就再也读不到它了。
+            if (!on && controlMode != ControlMode.OFF) lastActiveMode = controlMode
+            val restore = lastActiveMode
             val ok = withControl {
                 if (on) {
-                    controlMode = ControlMode.MANUAL
-                    // 两个节点分别写、分别判定：短路 `&&` 会在第一个失败时静默跳过第二个，
-                    // 让「只写成一半」的状态被当成整体失败或整体成功。
-                    val level = FanNodes.writeInt(FanNodes.targetLevelPath, 1)
-                    val duty = FanNodes.writeInt(FanNodes.pwmDutyPath, 0)
-                    level && duty
+                    when (restore) {
+                        ControlMode.SMART -> restoreSmart()
+                        ControlMode.BOOST -> restoreBoost()
+                        else -> restoreManual()
+                    }
                 } else {
                     controlMode = ControlMode.OFF
                     val level = FanNodes.writeInt(FanNodes.targetLevelPath, 0)
@@ -413,15 +443,81 @@ class FanManager(private val context: Context) : CoolerTransport {
                 }
             }
             if (ok == true) {
-                lastPwm = 0
-                // 关闭/恢复静谧档都是直接写下来的，过渡状态钉在落定值上。
-                settleRamp(0)
+                if (on) {
+                    // 恢复智能/满速时这两个字段已由各自的恢复函数写到落定值上。
+                    if (restore != ControlMode.SMART && restore != ControlMode.BOOST) {
+                        lastPwm = 0
+                        settleRamp(0)
+                    }
+                } else {
+                    lastPwm = 0
+                    // 关闭/恢复静谧档都是直接写下来的，过渡状态钉在落定值上。
+                    settleRamp(0)
+                }
                 setControlError(false)
             } else if (ok == false) {
                 setControlError(true)
             }
             publishControlState()
         }
+    }
+
+    /**
+     * 恢复手动静谧档：`target_level 1` + `pwm_duty 0`。
+     *
+     * 两个节点分别写、分别判定：短路 `&&` 会在第一个失败时静默跳过第二个，
+     * 让「只写成一半」的状态被当成整体失败或整体成功。
+     *
+     * 调用方必须已持有 [controlMutex]。
+     */
+    private suspend fun restoreManual(): Boolean {
+        controlMode = ControlMode.MANUAL
+        val level = FanNodes.writeInt(FanNodes.targetLevelPath, 1)
+        val duty = FanNodes.writeInt(FanNodes.pwmDutyPath, 0)
+        return level && duty
+    }
+
+    /**
+     * 恢复智能温控：重新读温度、按曲线算出目标占空比并落到位。
+     *
+     * **必须重新算曲线**，不能只把 [controlMode] 改回 SMART —— 温度在这段时间里
+     * 已经变了，沿用旧的 [smartTargetPwm] 会让风扇按过期的目标转，
+     * 直到下一次轮询才纠正。
+     *
+     * 温度读不到时**绝不进温控**（与 [applySmart] 同一原则：拿 0°C 算曲线会把风扇压到最低），
+     * 此时退回静谧档并如实报告失败。
+     *
+     * 调用方必须已持有 [controlMutex]。
+     */
+    private suspend fun restoreSmart(): Boolean {
+        val temperature = FanNodes.readTemperatureC(temperatureSource)
+        if (temperature == null) {
+            setControlError(true)
+            return restoreManual()
+        }
+        controlMode = ControlMode.SMART
+        beginRamp(smartCurve.pwmFor(temperature))
+        val applied = rampPwmNow()
+        val level = FanNodes.writeInt(FanNodes.targetLevelPath, 1)
+        val duty = FanNodes.writeInt(FanNodes.pwmDutyPath, applied)
+        if (duty) lastPwm = applied
+        return level && duty
+    }
+
+    /**
+     * 恢复满速：`target_level 4` + `pwm_duty 99`。
+     *
+     * 调用方必须已持有 [controlMutex]。
+     */
+    private suspend fun restoreBoost(): Boolean {
+        controlMode = ControlMode.BOOST
+        val level = FanNodes.writeInt(FanNodes.targetLevelPath, 4)
+        val duty = FanNodes.writeInt(FanNodes.pwmDutyPath, 99)
+        if (level && duty) {
+            settleRamp(99)
+            lastPwm = 99
+        }
+        return level && duty
     }
 
     /** 智能温控：按温度曲线自动调速。 */
@@ -524,6 +620,7 @@ class FanManager(private val context: Context) : CoolerTransport {
         val ok = controlMutex.withLock {
             val level = FanNodes.writeInt(FanNodes.targetLevelPath, 1)
             val enable = FanNodes.runSu(FanNodes.cmdSetCoolingFanEnable(true)).success
+            // 交还给系统时固定用静谧档（见 [SYSTEM_SILENT_MODE] 的说明）。
             val mode = FanNodes.runSu(FanNodes.cmdSetFanMode(SYSTEM_SILENT_MODE)).success
             if (level && enable && mode) {
                 tookOver = false
@@ -559,11 +656,15 @@ class FanManager(private val context: Context) : CoolerTransport {
      */
     private fun publishControlState(pendingPercent: Int? = null) {
         val mode = controlMode
+        // 每次落入一个非 OFF 的运行模式都刷新记忆，这样它始终是"用户最后选的那个模式"，
+        // 而不是"上一个被关掉时的模式"（后者在关-A开-B再关之后会过期）。
+        if (mode != ControlMode.OFF) lastActiveMode = mode
         _state.update {
             it.copy(
                 coolingOn = mode != ControlMode.OFF,
                 smartOn = mode == ControlMode.SMART,
                 boostOn = mode == ControlMode.BOOST,
+                curvePreset = smartCurve.matchingPreset()?.ordinal ?: -1,
                 fanMode = when (mode) {
                     ControlMode.OFF -> FanMode.OFF
                     ControlMode.SMART -> FanMode.AUTO

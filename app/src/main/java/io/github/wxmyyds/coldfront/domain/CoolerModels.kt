@@ -142,6 +142,13 @@ data class CoolerLiveState(
     val coolingOn: Boolean = false,
     /** 智能温控(1018): 设备自主温控 */
     val smartOn: Boolean = false,
+    /**
+     * 当前温控曲线对应的预设下标（0 静谧 / 1 均衡 / 2 性能），自定义曲线为 -1。
+     *
+     * 控制中心面板与软件内曲线页共用存储里的同一条曲线，因此这个值既决定面板高亮哪一档，
+     * 也让「面板换档」与「软件里换曲线」永远显示同一个事实。
+     */
+    val curvePreset: Int = -1,
     /** 破坏神/Boost 超频(1017) */
     val boostOn: Boolean = false,
     /** 过冷/冷凝保护(101F bit2) */

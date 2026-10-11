@@ -21,6 +21,9 @@
 
     <!-- 前台服务（持续监控与自动调速） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 内置风扇控制既不是蓝牙设备连接，也不是媒体播放，Android 14+ 只认 specialUse；
+         保留 connectedDevice 声明会因缺少 BLUETOOTH_CONNECT 而 startForeground 失败 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -51,15 +54,20 @@
             android:name=".service.CoolerService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="internal_fan_control" />
+        </service>
 
-        <!-- 快捷设置磁贴 -->
+        <!-- 快捷设置磁贴：风扇总开关（全应用只保留这一个磁贴）。
+             图标用五叶扇叶矢量图，label 与首页标题一致。 -->
         <service
-            android:name=".service.CoolerTileService"
+            android:name=".service.SystemFanTileService"
             android:enabled="true"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:label="ColdFront"
+            android:icon="@drawable/ic_fan_five_blade"
+            android:label="@string/tile_fan_label"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

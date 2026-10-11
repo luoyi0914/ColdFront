@@ -43,6 +43,9 @@ object FanNodes {
     const val CMD_GET_FAN_MODE = "/system/bin/settings get system fan_mode"
     fun cmdSetFanMode(mode: Int) = "/system/bin/settings put system fan_mode $mode"
 
+    /** 智能温控档位。**开关智能温控与选中档位是同一件事**，见 [cmdSetFanMode]。 */
+    const val SYSTEM_FAN_MODE_SMART = -1
+
     /** 只为确认 uid：授权成功后输出 `0`。 */
     private const val CMD_GET_UID = "/system/bin/id -u"
 
