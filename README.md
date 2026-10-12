@@ -35,7 +35,11 @@ REDMI K90 至尊版（K90 Ultra / K90 Max）**内置风扇**控制器 —— 基
 
 底层 `ble/`、`domain/` 仍保留上游的 BLE 代码与协议常量（`CoolerTransport` 接口、若干未被界面引用的 state 文件），作为历史与参考实现存在，**界面上已无入口**。8 Pro 的 BLE 协议逆向资料仍保留在 [docs/protocol-8pro.md](docs/protocol-8pro.md)，仅供查阅，与本 fork 的运行路径无关。
 
-> ⚠️ **已知残留**：`AndroidManifest.xml` 仍声明 `BLUETOOTH*` / `ACCESS_FINE_LOCATION` 等权限，并保留 `<uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />`。应用运行时只申请通知权限（`MainActivity.PermissionEffects`），并不使用蓝牙，但 `required="true"` 仍可能让无 BLE 硬件的设备在应用商店被过滤。清理这部分清单属于代码改动，本次未涉及。
+> ✅ **权限已清理**（2026-10-12）：上述 `BLUETOOTH*` / `ACCESS_*_LOCATION` 权限与
+> `<uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />`
+> 均已从 `AndroidManifest.xml` 移除。现在只声明 4 项权限：`FOREGROUND_SERVICE`、
+> `FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`、`RECEIVE_BOOT_COMPLETED`，
+> 应用信息页不再出现与功能无关的「附近设备 / 位置」权限项。
 
 ## 支持的设备
 
@@ -165,7 +169,7 @@ app/src/main/java/io/github/wxmyyds/coldfront/
 - **运行检查**：四项必需项的通过/失败判定在真机上的表现未验证；Root 被拒时 `SKIP` 状态的界面呈现未验证。
 - **引导与持久化**：首次启动四步流程、`onboarding_completed` 落盘与重启后跳过引导未实机验证。
 - **上游 BLE 残留代码**：`ble/` 与协议相关代码已不在运行路径上，但也未做完整清理验证。
-- **清单未清理**：`AndroidManifest.xml` 仍声明 BLE / 定位权限与 `bluetooth_le required="true"`（见「本 fork 已移除」下的提示）。这些声明不影响现有编译与单测，但无 BLE 硬件的设备上的实际表现未验证。
+- **清单未清理** → 已于 2026-10-12 清理完毕，见「本 fork 已移除」下的说明。
 - **界面与交互**：两个底部标签、四步引导、「运行检查」复用路径、满速/智能互斥的禁用态等 UI 行为均只经编译与单测，未在真机上点过。
 
 ## 构建

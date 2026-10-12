@@ -1,10 +1,14 @@
 name: Publish K90 APK
 
-# 只发布「可直接安装的 debug 签名 APK」，因此不需要任何签名密钥 Secret。
+# 发布「可直接安装的精简 release APK」：走 R8 代码裁剪 + 资源裁剪，体积约为 debug 包的 1/10。
+#
+# 签名方式：CI 内**现场生成一个 debug 风格的临时密钥库**（口令固定 android），
+# 因此不需要任何仓库 Secret，也不会把密钥提交进仓库。产物用 debug 密钥签名，
+# 与历史版本同签名，可直接覆盖安装。
 # 正式签名发布仍由 release-stable.yml（需要 COLDFRONT_KEYSTORE_* Secrets）负责。
 #
 # 触发：推送到 main，或在 Actions 页面手动 Run workflow。
-# 产物：Release `v<versionName>-k90u`，附件 `ColdFront-v<versionName>-k90u-debug.apk`。
+# 产物：Release `v<versionName>-k90u`，附件 `ColdFront-v<versionName>-k90u.apk`。
 
 on:
   push:
@@ -20,7 +24,7 @@ concurrency:
 
 jobs:
   publish:
-    name: Build debug APK and publish release
+    name: Build slim release APK and publish release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,8 +43,67 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
-      - name: Assemble debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      # release 构建签名的凭据由 build.gradle.kts 的 signingValue() 读取：
+      # 环境变量 COLDFRONT_KEYSTORE_* 优先，其次 Gradle 属性 coldfront.*。
+      # 这里用环境变量指向现场生成的密钥库。
+      - name: Generate throwaway debug-style keystore
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ks"
+          keytool -genkeypair -v \
+            -keystore "$RUNNER_TEMP/ks/release.jks" \
+            -storetype JKS \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias androiddebugkey \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+          # 固定好可覆盖安装的签名身份（与本地 debug 包一致），并便于排查
+          ls -l "$RUNNER_TEMP/ks/release.jks"
+
+      - name: Assemble slim release APK
+        env:
+          COLDFRONT_KEYSTORE_FILE: ${{ runner.temp }}/ks/release.jks
+          COLDFRONT_KEYSTORE_PASSWORD: android
+          COLDFRONT_KEY_ALIAS: androiddebugkey
+          COLDFRONT_KEY_PASSWORD: android
+        run: ./gradlew assembleRelease --stacktrace
+
+      # R8 静默误删是这类构建最大的风险：组件类、@Serializable 路由、枚举常量名
+      # 一旦被裁剪或改名，安装后会出现无法启动 / 历史数据解析失败，而构建本身仍然成功。
+      # 因此发布前做一次产物体检，失败即中止发布。
+      - name: Verify slim APK contents
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -f "$APK" || { echo "::error::未生成 release APK"; ls -l app/build/outputs/apk/release/ || true; exit 1; }
+
+          SIZE=$(stat -c%s "$APK")
+          echo "APK 体积：$SIZE 字节 ($(awk "BEGIN{printf \"%.2f\", $SIZE/1048576}") MB)"
+          # 瘦身目标是 ~2 MB；超过 8 MB 说明裁剪没有生效（例如误打了 debug 变体）
+          if [ "$SIZE" -gt 8388608 ]; then
+            echo "::error::APK 体积异常（$SIZE 字节），疑似未走 R8 裁剪"
+            exit 1
+          fi
+
+          # 必须存在且未改名的组件类
+          for C in ColdFrontApp MainActivity CoolerService SystemFanTileService BootReceiver; do
+            grep -q "$C" app/build/outputs/mapping/release/mapping.txt \
+              || { echo "::error::$C 不在 mapping 中，可能被 R8 删除"; exit 1; }
+          done
+
+          # 落盘 JSON 按 .name 反查，枚举常量名被混淆会导致历史数据解析失败
+          for E in BUILT_IN_FAN JACKET_8_PRO JACKET_4 JACKET_6_PRO; do
+            unzip -p "$APK" classes.dex | grep -q "$E" \
+              || { echo "::error::枚举常量 $E 丢失"; exit 1; }
+          done
+
+          # 4 条 @Serializable 路由必须保持原名（按名序列化）
+          for R in 'AppRoute$Main' 'AppRoute$About' 'AppRoute$Recheck' 'AppRoute$Curve'; do
+            grep -q "$R" app/build/outputs/mapping/release/mapping.txt \
+              || { echo "::error::序列化路由 $R 丢失"; exit 1; }
+          done
+
+          echo "产物体检通过"
 
       - name: Publish GitHub Release
         env:
@@ -50,14 +113,12 @@ jobs:
           # 版本号是构建时按当天日期算出来的（yy.MM.dd-n），源码里没有字面量可 grep，
           # 唯一权威是构建产物 BuildConfig。
           VERSION=$(grep -oP 'VERSION_NAME\s*=\s*"\K[^"]+' \
-            app/build/generated/source/buildConfig/debug/io/github/wxmyyds/coldfront/BuildConfig.java)
+            app/build/generated/source/buildConfig/release/io/github/wxmyyds/coldfront/BuildConfig.java)
           TAG="v${VERSION}-k90u"
-          ASSET="ColdFront-v${VERSION}-k90u-debug.apk"
+          ASSET="ColdFront-v${VERSION}-k90u.apk"
           NOTES="docs/release-notes-k90u.md"
 
-          test -f app/build/outputs/apk/debug/app-debug.apk \
-            || { echo "::error::未生成 debug APK"; ls -l app/build/outputs/apk/debug/ || true; exit 1; }
-          cp app/build/outputs/apk/debug/app-debug.apk "$ASSET"
+          cp app/build/outputs/apk/release/app-release.apk "$ASSET"
           ls -l "$ASSET"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
