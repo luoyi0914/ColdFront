@@ -54,8 +54,11 @@ interface CoolerTransport : BackgroundLinkLossStore {
      * 告知控制后端屏幕是否点亮。
      *
      * 目前只有内置风扇用得到：「息屏停转」需要在息屏时挂起曲线并放慢轮询。
-     * 屏幕广播由**前台服务**持有（生命周期归属清晰），再转告后端，
-     * 而不是让后端自己去注册广播。
+     * 屏幕广播由 **Application**（[io.github.wxmyyds.coldfront.ColdFrontApp]）持有，
+     * 再转告后端，而不是让后端自己去注册广播。
+     *
+     * 宿主从「前台服务」换成了 Application：服务只在开机自启与手动切换时启动，
+     * 从界面打开「智能温控」并不启动服务，监听因此会静默失效。
      *
      * 默认空实现：上游 BLE 散热器没有这条策略。
      */

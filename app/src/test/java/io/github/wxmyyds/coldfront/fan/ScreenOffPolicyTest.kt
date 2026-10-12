@@ -5,12 +5,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 息屏停转的双阈值判定。纯 JVM，不需要设备。
+ * 息屏停转的判定。纯 JVM，不需要设备。
  *
- * 覆盖三件事：
+ * 覆盖四件事：
  * 1. **不进入停转的条件必须都兜住** —— 开关关闭、非智能温控、屏幕亮、充电、温度读不到；
- * 2. **迟滞真的成立** —— 迟滞带内不得在两个相位之间反复跳；
- * 3. **亮屏一定回到 [ScreenPhase.ACTIVE]** —— 否则风扇会带着停转状态醒不过来。
+ * 2. **迟滞真的成立** —— 停转态在迟滞带内不得反复跳；
+ * 3. **亮屏一定回到 [ScreenPhase.ACTIVE]** —— 否则风扇会带着停转状态醒不过来；
+ * 4. **凉就停转，不"交还系统"** —— 交还系统会让驱动把转速拉到 ~12000 rpm，
+ *    正是用户报告的「息屏后转速先飙高」故障，所以低于阈值必须走 [ScreenPhase.STOPPED]。
  */
 class ScreenOffPolicyTest {
 
@@ -76,42 +78,41 @@ class ScreenOffPolicyTest {
         )
     }
 
+    @Test
+    fun `recovers from handed back to stopped once the temperature drops`() {
+        // 交还态（充电拔掉 / 温度恢复可读）在凉下来后应能重新停转，
+        // 否则一次交还就永远回不到省电的停转状态。
+        assertEquals(
+            ScreenPhase.STOPPED,
+            next(temperatureC = 30, current = ScreenPhase.HANDED_BACK),
+        )
+    }
+
     // ───────────────────── 双阈值 ─────────────────────
 
     @Test
     fun `stops only below the lower threshold`() {
         assertEquals(ScreenPhase.STOPPED, next(temperatureC = ScreenOffPolicy.STOP_BELOW_C - 1))
-        // 恰好等于下限不进入停转：进入条件保守。
+        // 恰好等于下限不进入停转：进入条件保守（交给系统，不主动停）。
         assertEquals(ScreenPhase.HANDED_BACK, next(temperatureC = ScreenOffPolicy.STOP_BELOW_C))
     }
 
     @Test
-    fun `resumes at the upper threshold once stopped`() {
-        assertEquals(ScreenPhase.STOPPED, next(temperatureC = ScreenOffPolicy.RESUME_ABOVE_C - 1, current = ScreenPhase.STOPPED))
-        assertEquals(ScreenPhase.HANDED_BACK, next(temperatureC = ScreenOffPolicy.RESUME_ABOVE_C, current = ScreenPhase.STOPPED))
+    fun `stays stopped anywhere inside the hysteresis band`() {
+        // 停转态一旦建立，只要没到下阈值退出条件就**持续保持停转**。
+        // 这是本次修复的核心：绝不能在带内滑向 HANDED_BACK（那会让风扇飙到 ~12000 rpm）。
+        (ScreenOffPolicy.STOP_BELOW_C until ScreenOffPolicy.RESUME_ABOVE_C).forEach { temperature ->
+            assertEquals(
+                "停转态在 ${temperature}°C 不应退出、更不应交还系统",
+                ScreenPhase.STOPPED,
+                next(temperatureC = temperature, current = ScreenPhase.STOPPED),
+            )
+        }
     }
 
     @Test
     fun `the hysteresis band is non-empty and ordered`() {
         assertTrue(ScreenOffPolicy.STOP_BELOW_C < ScreenOffPolicy.RESUME_ABOVE_C)
-    }
-
-    @Test
-    fun `does not flap anywhere inside the hysteresis band`() {
-        // 迟滞带内：停住的保持停住，交出的保持交出 —— 两边的判定必须相反，
-        // 否则温度在带内浮动时风扇会忽起忽停。
-        (ScreenOffPolicy.STOP_BELOW_C until ScreenOffPolicy.RESUME_ABOVE_C).forEach { temperature ->
-            assertEquals(
-                "停转态在 ${temperature}°C 不应退出",
-                ScreenPhase.STOPPED,
-                next(temperatureC = temperature, current = ScreenPhase.STOPPED),
-            )
-            assertEquals(
-                "交还态在 ${temperature}°C 不应收回",
-                ScreenPhase.HANDED_BACK,
-                next(temperatureC = temperature, current = ScreenPhase.HANDED_BACK),
-            )
-        }
     }
 
     @Test
@@ -126,8 +127,9 @@ class ScreenOffPolicyTest {
     }
 
     @Test
-    fun `holding a warm curve below the lower threshold is what stops the fan`() {
-        // 一个典型回合：熄屏、凉 → 停转；随后转热越过高阈值 → 交还系统。
+    fun `holding a warm curve below the upper threshold keeps the fan stopped`() {
+        // 一个典型回合：熄屏、凉 → 停转；随后转热但未越过退出阈值 → **仍然停转**；
+        // 只有越过高阈值才交还系统（热兜底）。
         val stopped = next(temperatureC = 38)
         assertEquals(ScreenPhase.STOPPED, stopped)
         assertEquals(ScreenPhase.STOPPED, next(temperatureC = 45, current = stopped))

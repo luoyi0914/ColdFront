@@ -1,36 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 蓝牙：Android 11 及以下（API <= 30）旧权限 -->
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-
-    <!-- 蓝牙：Android 12+（API >= 31）新权限。neverForLocation：扫描结果不依赖定位服务，
-         否则系统把 BLE 结果当作位置数据，定位关闭时一个广播都不下发 -->
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionFlags="neverForLocation" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-
-    <!-- BLE 扫描在 Android 11 及以下需要位置权限；部分 OEM ROM 在 12+ 也强制要求，保留可申请 -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!-- 要求 BLE 硬件 -->
-    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+    <!--
+      蓝牙 / 定位权限已全部移除（2026-10-12 瘦身）。
+      本 fork 控制的是 K90 Ultra/Max **内置风扇**，走 root sysfs，完全不走蓝牙：
+        - BleManagerHolder.kt 构造的是 FanManager，CoolerBleManager 从未被实例化；
+        - MainActivity 的 PermissionEffects 只申请 POST_NOTIFICATIONS
+          （见 ui/MainActivity.kt:172-175 的说明）；
+        - FanManager 恒定上报 permissionGranted/locationServiceEnabled/bluetoothOn = true。
+      上游那些权限是给红魔外置散热器的 BLE 扫描用的，对本机型纯属多余，
+      且会让用户在应用信息页看到一堆"位置/附近设备"权限而产生困惑。
+    -->
 
     <!-- 前台服务（持续监控与自动调速） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- 内置风扇控制既不是蓝牙设备连接，也不是媒体播放，Android 14+ 只认 specialUse；
-         保留 connectedDevice 声明会因缺少 BLUETOOTH_CONNECT 而 startForeground 失败 -->
+    <!-- 内置风扇控制既不是蓝牙设备连接，也不是媒体播放，用 specialUse。
+         CONNECTED_DEVICE 声明已一并移除：它要求实际持有 BLUETOOTH_CONNECT，
+         而本应用已不再申请任何蓝牙权限（CoolerService 也不再用该类型）。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- 开机自启（恢复自动模式服务） -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
+        android:name=".ColdFrontApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"

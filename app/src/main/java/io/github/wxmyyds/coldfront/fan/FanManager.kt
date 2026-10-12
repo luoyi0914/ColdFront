@@ -796,6 +796,10 @@ class FanManager(private val context: Context) : CoolerTransport {
         screenInteractive = interactive
         // 立刻重算一次，不等下一个轮询周期：息屏轮询间隔是 15 秒，
         // 亮屏后最多等 15 秒才恢复曲线是不可接受的。
+        //
+        // 息屏这一侧**必须用最近一次读到的温度**（哪怕略旧）：等的这 15 秒里用户
+        // 期望的正是"2~3 秒内停转"，拿不到温度反而会推迟到下一轮才有动作。
+        // 温度确实从未读到过时仍交给 [ScreenOffPolicy] 判定为 HANDED_BACK（安全优先）。
         scope.launch { applyScreenPhase(lastTemperature?.toInt()) }
     }
 
@@ -831,18 +835,30 @@ class FanManager(private val context: Context) : CoolerTransport {
             when (target) {
                 ScreenPhase.ACTIVE -> {
                     tookOver = false
+                    // 必须把 target_level 一并归 0：HANDED_BACK 曾把它写成 1，
+                    // 而 target_level=1 会让 pwm-fan 驱动接管并**忽略**我们的 pwm 写入
+                    // （实测残留 target_level=1 时风扇维持 ~12000 rpm，pwm_duty 写 0 也无效）。
+                    // 不清掉这个残留，重新接管后曲线会写不动风扇。
+                    FanNodes.writeInt(FanNodes.targetLevelPath, 0)
                     runCatching { FanNodes.runSu(FanNodes.cmdSetCoolingFanEnable(false)).success }
                         .getOrDefault(false)
                         .also { tookOver = it }
                 }
                 ScreenPhase.STOPPED -> {
+                    // 关键是**保持接管**：只写 pwm_duty=0 而不夺回 cooling_fan_enable，
+                    // 系统的 mi_thermald 会把转速抢回去（实测会维持在 ~12000 rpm）。
+                    // 顺序：先 target_level=0 停掉驱动驱动，再夺回控制权，最后写 0 占空比。
                     val level = FanNodes.writeInt(FanNodes.targetLevelPath, 0)
+                    val taken = runCatching {
+                        FanNodes.runSu(FanNodes.cmdSetCoolingFanEnable(false)).success
+                    }.getOrDefault(false)
+                    if (taken) tookOver = true
                     val duty = FanNodes.writeInt(FanNodes.pwmDutyPath, 0)
-                    if (level && duty) {
+                    if (level && taken && duty) {
                         lastPwm = 0
                         settleRamp(0)
                     }
-                    level && duty
+                    level && taken && duty
                 }
                 ScreenPhase.HANDED_BACK -> writeHandedBack()
             }
@@ -853,6 +869,12 @@ class FanManager(private val context: Context) : CoolerTransport {
     }
 
     /**
+     * 把风扇交还系统：`target_level 1` + 系统接管 + 静谧档。
+     *
+     * **只在"我们不敢自己管"的场景调用**（充电、温度读不到、连续读温失败降级）。
+     * 息屏停转**不走这里** —— 交还系统会让驱动立刻接管并把转速拉到 ~12000 rpm
+     * （详见 [ScreenOffPolicy] 的实测记录），而用户要的是安静停转。
+     *
      * Caller must already hold [controlMutex]. This operation intentionally attempts all
      * three writes even if an earlier one fails, so partial cleanup is minimized.
      */

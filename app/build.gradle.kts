@@ -114,7 +114,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // 开启 R8 代码裁剪与资源裁剪。此前为 false，导致整个 Compose 全家桶、
+            // 两套 Material Symbols 图标库、以及蓝牙散热器时代的残留代码全部进包
+            // （15 个 dex，classes.dex 单个 19.2 MB，APK 22.1 MB）。
+            isMinifyEnabled = true
+            // 资源裁剪依赖代码裁剪：两者必须同时开启，否则未引用资源仍会保留。
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

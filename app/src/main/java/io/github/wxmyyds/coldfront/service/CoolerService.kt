@@ -5,18 +5,14 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import androidx.core.content.ContextCompat
 import io.github.wxmyyds.coldfront.ble.BleManagerHolder
 import io.github.wxmyyds.coldfront.ble.CoolerTransport
 import io.github.wxmyyds.coldfront.data.ProfileRepository
@@ -100,39 +96,6 @@ class CoolerService : Service() {
     private var strings: AppStrings = stringsFor(Locale.getDefault())
     private var lastNotification: ServiceNotification? = null
 
-    /**
-     * 屏幕状态广播：**息屏停转**靠它决定何时挂起曲线、何时放慢轮询。
-     *
-     * 广播由服务持有，而不是让 `FanManager` 自己去注册：生命周期归属要清晰，
-     * 也避免控制器在没有任何宿主时偷偷活着。
-     */
-    private val screenReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            when (intent.action) {
-                Intent.ACTION_SCREEN_ON -> ble.setScreenInteractive(true)
-                Intent.ACTION_SCREEN_OFF -> ble.setScreenInteractive(false)
-            }
-        }
-    }
-
-    private fun registerScreenReceiver() {
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_SCREEN_OFF)
-        }
-        ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        // 服务可能是息屏时被拉起来的（START_STICKY / 开机恢复），初始状态必须问系统，
-        // 不能默认亮屏 —— 否则一开机就会把曲线当成"屏幕正亮着"跑起来。
-        ble.setScreenInteractive(isInteractive())
-    }
-
-    private fun unregisterScreenReceiver() {
-        runCatching { unregisterReceiver(screenReceiver) }
-    }
-
-    private fun isInteractive(): Boolean =
-        getSystemService(PowerManager::class.java)?.isInteractive ?: true
-
     override fun onCreate() {
         super.onCreate()
         // Permission checks also belong here: exceptions from onCreate are NOT caught by
@@ -141,14 +104,20 @@ class CoolerService : Service() {
         profiles = ProfileRepository(applicationContext)
         createNotificationChannel()
         try {
-            // Android 14+ 会校验前台服务类型对应的权限：connectedDevice 要求实际持有
-            // BLUETOOTH_CONNECT/SCAN 等权限，而本应用改造为内置风扇后已不再申请蓝牙权限，
-            // 于是 startForeground 抛 RemoteException（validateForegroundServiceType）。
-            // 内置风扇控制改用 specialUse（API 34+）；旧版本没有这项校验，沿用 connectedDevice。
+            // 前台服务类型必须与**实际持有的权限**相容，否则 startForeground 抛
+            // RemoteException（Android 14+ 会走 validateForegroundServiceType）。
+            //
+            // 历史：本应用最初是红魔外置散热器控制器，用 connectedDevice（因为要与
+            // 蓝牙设备保持连接）。改造为 K90 内置风扇后走 root sysfs，**完全不碰蓝牙**，
+            // 2026-10-12 瘦身时已把 BLUETOOTH_CONNECT/SCAN 等权限从 Manifest 移除，
+            // 因此 connectedDevice 在任何 API 上都不再成立——继续用它就是一个必然失败的分支。
+            //
+            // specialUse 自 API 34 起可用；manifest 已为其声明
+            // FOREGROUND_SERVICE_SPECIAL_USE。低于 34 时该类型常量不存在，
+            // 而 Android 14 之前**不校验**前台服务类型与权限的对应关系，
+            // 传 0（无类型）即可正常进入前台。
             val type = when {
                 Build.VERSION.SDK_INT >= 34 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ->
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
                 else -> 0
             }
             val waiting = ServiceNotification(strings.serviceWaitingConfig, 0, showReconnect = true)
@@ -161,9 +130,6 @@ class CoolerService : Service() {
             return
         }
         observeState()
-        // 注册放在 try/catch **之后**：上面提前 stopSelf() 的分支若也注册了，
-        // 就会留下一个没人注销的接收器。
-        registerScreenReceiver()
         scope.launch {
             for (command in commands) {
                 processingStartId = command.startId
@@ -328,7 +294,6 @@ class CoolerService : Service() {
 
     override fun onDestroy() {
         if (running === this) running = null
-        unregisterScreenReceiver()
         commands.close()
         scope.cancel()
         BleManagerHolder.release(this)
