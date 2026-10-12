@@ -125,6 +125,15 @@ jobs:
             echo "Release $TAG 已存在：覆盖附件并刷新说明"
             gh release upload "$TAG" "$ASSET" --clobber
             gh release edit "$TAG" --title "ColdFront v${VERSION}-k90u" --notes-file "$NOTES"
+            # 清掉同一 Release 下遗留的旧附件（例如早期工作流产出的未瘦身 -debug 包），
+            # 否则下载页会同时挂着 2 MB 的正式包和 21 MB 的旧包，用户容易拿错。
+            while IFS= read -r OLD; do
+              [ -z "$OLD" ] && continue
+              [ "$OLD" = "$ASSET" ] && continue   # 别把刚上传的正式包删了
+              case "$OLD" in
+                *.apk) echo "删除遗留附件 $OLD"; gh release delete-asset "$TAG" "$OLD" --yes ;;
+              esac
+            done < <(gh release view "$TAG" --json assets --jq '.assets[].name')
           else
             echo "创建 Release $TAG"
             gh release create "$TAG" "$ASSET" \
